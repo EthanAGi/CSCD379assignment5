@@ -1,7 +1,7 @@
-# StorySmith (Working Title) — Requirements
+# CanonGuard (Working Title) — Requirements
 
 ## Elevator Pitch (1–4 sentences)
-StorySmith is an AI-enabled writing companion that automatically builds a “Story Bible” from your manuscript: characters, locations, themes, and arcs. It helps writers stay consistent, find relevant context instantly using semantic (vector) search, and receive targeted revision feedback. A stretch feature, image generation turns a passage into concept art for characters or scenes to support visualization and inspiration, possibly to create cover art or promotional material. Another stretch goal would be having AI read your passages, creating audio books or simply saying a passage back to hear it out loud.
+CannonGuard is an AI-enabled writing companion that automatically builds a “Story Bible” from your manuscript: characters, locations, themes, and arcs. It helps writers stay consistent, find relevant context instantly using semantic (vector) search, and receive targeted revision feedback. A stretch feature, image generation turns a passage into concept art for characters or scenes to support visualization and inspiration, possibly to create cover art or promotional material. Another stretch goal would be having AI read your passages, creating audio books or simply saying a passage back to hear it out loud.
 - Screenwriters / tabletop campaign writers
 - Students writing long-form creative work
 - Writing groups collaborating on shared universes
