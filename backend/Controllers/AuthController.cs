@@ -1,13 +1,24 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
-using CanonGuard.Api.DTOs;
 using CanonGuard.Api.Models;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 
 namespace CanonGuard.Api.Controllers;
+
+public class RegisterRequest
+{
+    public string Email { get; set; } = default!;
+    public string Password { get; set; } = default!;
+}
+
+public class LoginRequest
+{
+    public string Email { get; set; } = default!;
+    public string Password { get; set; } = default!;
+}
 
 [ApiController]
 [Route("api/[controller]")]
@@ -25,6 +36,12 @@ public class AuthController : ControllerBase
     [HttpPost("register")]
     public async Task<IActionResult> Register(RegisterRequest request)
     {
+        var existingUser = await _userManager.FindByEmailAsync(request.Email);
+        if (existingUser != null)
+        {
+            return BadRequest(new { message = "An account with that email already exists." });
+        }
+
         var user = new AppUser
         {
             UserName = request.Email,
@@ -34,7 +51,10 @@ public class AuthController : ControllerBase
         var result = await _userManager.CreateAsync(user, request.Password);
 
         if (!result.Succeeded)
-            return BadRequest(result.Errors);
+        {
+            var errors = result.Errors.Select(e => e.Description).ToList();
+            return BadRequest(new { message = string.Join(" ", errors) });
+        }
 
         return Ok(new { message = "Registered successfully" });
     }
@@ -43,8 +63,11 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> Login(LoginRequest request)
     {
         var user = await _userManager.FindByEmailAsync(request.Email);
+
         if (user == null || !await _userManager.CheckPasswordAsync(user, request.Password))
-            return Unauthorized(new { message = "Invalid credentials" });
+        {
+            return Unauthorized(new { message = "Invalid email or password." });
+        }
 
         var claims = new List<Claim>
         {

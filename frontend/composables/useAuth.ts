@@ -1,24 +1,35 @@
-export const useAuth = () => {
-  const token = useState<string | null>('token', () => null)
+import { useState } from '#app'
 
-  const setToken = (value: string | null) => {
-    token.value = value
-    if (import.meta.client) {
-      if (value) localStorage.setItem('token', value)
-      else localStorage.removeItem('token')
+const TOKEN_KEY = 'canonguard_token'
+
+export const useAuth = () => {
+  const token = useState<string | null>('auth_token', () => null)
+
+  const init = () => {
+    if (import.meta.server) return
+    token.value = localStorage.getItem(TOKEN_KEY)
+  }
+
+  const setToken = (newToken: string | null) => {
+    token.value = newToken
+
+    if (import.meta.server) return
+
+    if (newToken) {
+      localStorage.setItem(TOKEN_KEY, newToken)
+    } else {
+      localStorage.removeItem(TOKEN_KEY)
     }
   }
 
-  const init = () => {
-    if (import.meta.client) {
-      token.value = localStorage.getItem('token')
-    }
+  const clear = () => {
+    setToken(null)
   }
 
   return {
     token,
-    isLoggedIn: computed(() => !!token.value),
+    init,
     setToken,
-    init
+    clear
   }
 }
