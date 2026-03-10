@@ -11,6 +11,24 @@ type Project = {
   createdAt: string
 }
 
+type Chapter = {
+  id: number
+  projectId: number
+  title: string
+  content: string
+  createdAt: string
+  updatedAt: string
+}
+
+type StoryEntity = {
+  id: number
+  projectId: number
+  type: 'Character' | 'Location' | 'Theme' | 'Arc'
+  name: string
+  summary: string
+  updatedAt: string
+}
+
 definePageMeta({
   layout: 'app'
 })
@@ -22,11 +40,17 @@ const projects = ref<Project[]>([])
 const loading = ref(true)
 const creating = ref(false)
 const pageReady = ref(false)
+const statsLoading = ref(false)
+const showCreateModal = ref(false)
 
 const errorMessage = ref('')
 const successMessage = ref('')
 const formErrorMessage = ref('')
 const debugMessage = ref('Dashboard initializing...')
+
+const totalChapters = ref(0)
+const totalCharacters = ref(0)
+const totalLocations = ref(0)
 
 const createForm = reactive({
   title: '',
@@ -44,6 +68,17 @@ const resetCreateForm = () => {
   createForm.title = ''
   createForm.description = ''
   formErrorMessage.value = ''
+}
+
+const openCreateModal = () => {
+  formErrorMessage.value = ''
+  showCreateModal.value = true
+}
+
+const closeCreateModal = () => {
+  if (creating.value) return
+  showCreateModal.value = false
+  resetCreateForm()
 }
 
 const redirectToLogin = async () => {
@@ -82,6 +117,76 @@ const loadProjects = async () => {
   }
 }
 
+const loadAccountStats = async () => {
+  statsLoading.value = true
+
+  totalChapters.value = 0
+  totalCharacters.value = 0
+  totalLocations.value = 0
+
+  if (projects.value.length === 0) {
+    logStep('Loaded 0 project(s). Stats reset to zero.')
+    statsLoading.value = false
+    return
+  }
+
+  logStep(`Loading stats across ${projects.value.length} project(s)...`)
+
+  try {
+    const chapterRequests = projects.value.map(project =>
+      apiFetch<Chapter[]>(`/projects/${project.id}/chapters`, {
+        method: 'GET'
+      })
+    )
+
+    const entityRequests = projects.value.map(project =>
+      apiFetch<StoryEntity[]>(`/projects/${project.id}/entities`, {
+        method: 'GET'
+      }).catch(() => [])
+    )
+
+    const [chapterResults, entityResults] = await Promise.all([
+      Promise.allSettled(chapterRequests),
+      Promise.allSettled(entityRequests)
+    ])
+
+    let chapterCount = 0
+    let characterCount = 0
+    let locationCount = 0
+
+    for (const result of chapterResults) {
+      if (result.status === 'fulfilled' && Array.isArray(result.value)) {
+        chapterCount += result.value.length
+      }
+    }
+
+    for (const result of entityResults) {
+      if (result.status === 'fulfilled' && Array.isArray(result.value)) {
+        for (const entity of result.value) {
+          if (entity.type === 'Character') {
+            characterCount += 1
+          } else if (entity.type === 'Location') {
+            locationCount += 1
+          }
+        }
+      }
+    }
+
+    totalChapters.value = chapterCount
+    totalCharacters.value = characterCount
+    totalLocations.value = locationCount
+
+    logStep(
+      `Stats loaded: ${totalProjects.value} project(s), ${totalChapters.value} chapter(s), ${totalCharacters.value} character(s), ${totalLocations.value} location(s).`
+    )
+  } catch (error: any) {
+    console.error('Failed to load dashboard stats:', error)
+    logStep('Projects loaded, but stats loading partially failed.')
+  } finally {
+    statsLoading.value = false
+  }
+}
+
 const createProject = async () => {
   formErrorMessage.value = ''
   errorMessage.value = ''
@@ -113,6 +218,9 @@ const createProject = async () => {
     projects.value.unshift(created)
     successMessage.value = `Project "${created.title}" created successfully.`
     resetCreateForm()
+    showCreateModal.value = false
+
+    await loadAccountStats()
   } catch (error: any) {
     console.error('Failed to create project:', error)
 
@@ -142,6 +250,7 @@ onMounted(async () => {
 
   pageReady.value = true
   await loadProjects()
+  await loadAccountStats()
 })
 </script>
 
@@ -178,7 +287,7 @@ onMounted(async () => {
           <div class="stat-card panel">
             <div class="stat-top">
               <v-icon icon="mdi-file-document-outline" size="20" color="#818cf8" />
-              <span>—</span>
+              <span>{{ statsLoading ? '—' : totalChapters }}</span>
             </div>
             <p>Total Chapters</p>
           </div>
@@ -186,7 +295,7 @@ onMounted(async () => {
           <div class="stat-card panel">
             <div class="stat-top">
               <v-icon icon="mdi-account-group-outline" size="20" color="#c084fc" />
-              <span>—</span>
+              <span>{{ statsLoading ? '—' : totalCharacters }}</span>
             </div>
             <p>Characters</p>
           </div>
@@ -194,7 +303,7 @@ onMounted(async () => {
           <div class="stat-card panel">
             <div class="stat-top">
               <v-icon icon="mdi-map-marker-outline" size="20" color="#60a5fa" />
-              <span>—</span>
+              <span>{{ statsLoading ? '—' : totalLocations }}</span>
             </div>
             <p>Locations</p>
           </div>
@@ -211,47 +320,14 @@ onMounted(async () => {
         <section class="project-section">
           <div class="section-row">
             <h2>Your Projects</h2>
-          </div>
 
-          <div class="create-panel panel">
-            <h3>Create New Project</h3>
-
-            <div v-if="formErrorMessage" class="message error">
-              {{ formErrorMessage }}
-            </div>
-
-            <div class="field-wrap">
-              <label class="form-label" for="project-title">Project Title</label>
-              <input
-                id="project-title"
-                v-model="createForm.title"
-                class="input-dark"
-                placeholder="Enter your project title"
-                :disabled="creating"
-              />
-            </div>
-
-            <div class="field-wrap">
-              <label class="form-label" for="project-description">Description</label>
-              <textarea
-                id="project-description"
-                v-model="createForm.description"
-                class="input-dark textarea-dark"
-                placeholder="Enter a short description"
-                :disabled="creating"
-              />
-            </div>
-
-            <div class="create-actions">
-              <button
-                type="button"
-                class="btn-primary"
-                :disabled="creating"
-                @click="createProject"
-              >
-                {{ creating ? 'Creating...' : 'Create Project' }}
-              </button>
-            </div>
+            <button
+              type="button"
+              class="btn-primary"
+              @click="openCreateModal"
+            >
+              Create New Project
+            </button>
           </div>
 
           <div v-if="loading" class="empty-panel panel">
@@ -303,6 +379,63 @@ onMounted(async () => {
           </div>
         </section>
       </template>
+    </div>
+
+    <div v-if="showCreateModal" class="modal-backdrop" @click.self="closeCreateModal">
+      <div class="modal panel">
+        <div class="modal-header">
+          <h2>Create New Project</h2>
+          <button class="icon-btn" type="button" @click="closeCreateModal" :disabled="creating">
+            <v-icon icon="mdi-close" size="20" />
+          </button>
+        </div>
+
+        <div v-if="formErrorMessage" class="message error modal-message">
+          {{ formErrorMessage }}
+        </div>
+
+        <div class="field-wrap">
+          <label class="form-label" for="project-title">Project Title</label>
+          <input
+            id="project-title"
+            v-model="createForm.title"
+            class="input-dark"
+            placeholder="Enter your project title"
+            :disabled="creating"
+          />
+        </div>
+
+        <div class="field-wrap">
+          <label class="form-label" for="project-description">Description</label>
+          <textarea
+            id="project-description"
+            v-model="createForm.description"
+            class="input-dark textarea-dark"
+            placeholder="Enter a short description"
+            :disabled="creating"
+          />
+        </div>
+
+        <div class="modal-actions">
+          <button
+            type="button"
+            class="btn-secondary"
+            @click="closeCreateModal"
+            :disabled="creating"
+          >
+            Cancel
+          </button>
+
+          <button
+            type="button"
+            class="btn-primary"
+            :disabled="creating"
+            @click="createProject"
+          >
+            {{ creating ? 'Creating...' : 'Create Project' }}
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -363,6 +496,10 @@ onMounted(async () => {
   color: #86efac;
 }
 
+.modal-message {
+  margin-bottom: 16px;
+}
+
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -399,6 +536,7 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 24px;
+  gap: 16px;
 }
 
 .section-row h2 {
@@ -406,18 +544,6 @@ onMounted(async () => {
   font-size: 2rem;
   font-weight: 700;
   color: white;
-}
-
-.create-panel {
-  padding: 24px;
-  border-radius: 16px;
-  margin-bottom: 24px;
-}
-
-.create-panel h3 {
-  margin: 0 0 20px;
-  color: white;
-  font-size: 1.3rem;
 }
 
 .field-wrap {
@@ -435,11 +561,6 @@ onMounted(async () => {
 .textarea-dark {
   min-height: 110px;
   resize: vertical;
-}
-
-.create-actions {
-  display: flex;
-  justify-content: flex-end;
 }
 
 .empty-panel {
@@ -533,6 +654,68 @@ onMounted(async () => {
   gap: 6px;
 }
 
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  z-index: 50;
+}
+
+.modal {
+  width: min(640px, 100%);
+  border-radius: 20px;
+  padding: 24px;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.modal-header h2 {
+  margin: 0;
+  color: white;
+  font-size: 1.5rem;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.icon-btn {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 10px;
+  background: #1f2937;
+  color: #d1d5db;
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.icon-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  border: 1px solid #374151;
+  background: transparent;
+  color: white;
+  border-radius: 12px;
+  padding: 10px 16px;
+  cursor: pointer;
+}
+
 @media (max-width: 1100px) {
   .stats-grid,
   .project-grid {
@@ -549,7 +732,6 @@ onMounted(async () => {
   .section-row {
     flex-direction: column;
     align-items: flex-start;
-    gap: 16px;
   }
 
   .dashboard-header h1 {
