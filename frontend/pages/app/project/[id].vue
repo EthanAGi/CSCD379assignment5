@@ -22,6 +22,15 @@ type Chapter = {
   updatedAt: string
 }
 
+type StoryEntity = {
+  id: number
+  projectId: number
+  type: 'Character' | 'Location' | 'Theme' | 'Arc'
+  name: string
+  summary: string
+  updatedAt: string
+}
+
 const route = useRoute()
 const { apiFetch } = useApi()
 const auth = useAuth()
@@ -30,9 +39,11 @@ const projectId = computed(() => Number(route.params.id))
 
 const project = ref<ProjectDetail | null>(null)
 const chapters = ref<Chapter[]>([])
+const entities = ref<StoryEntity[]>([])
 
 const pageLoading = ref(true)
 const creatingChapter = ref(false)
+const showCreateChapterModal = ref(false)
 
 const errorMessage = ref('')
 const successMessage = ref('')
@@ -45,6 +56,21 @@ const createChapterForm = reactive({
 
 const totalChapters = computed(() => chapters.value.length)
 
+const characterEntries = computed(() =>
+  entities.value.filter(entity => entity.type === 'Character')
+)
+
+const locationEntries = computed(() =>
+  entities.value.filter(entity => entity.type === 'Location')
+)
+
+const themeEntries = computed(() =>
+  entities.value.filter(entity => entity.type === 'Theme')
+)
+
+const totalCharacters = computed(() => characterEntries.value.length)
+const totalLocations = computed(() => locationEntries.value.length)
+
 const totalWords = computed(() => {
   return chapters.value.reduce((sum, chapter) => {
     const text = chapter.content?.trim() || ''
@@ -52,6 +78,10 @@ const totalWords = computed(() => {
     return sum + text.split(/\s+/).length
   }, 0)
 })
+
+const previewCharacters = computed(() => characterEntries.value.slice(0, 5))
+const previewLocations = computed(() => locationEntries.value.slice(0, 5))
+const previewThemes = computed(() => themeEntries.value.slice(0, 5))
 
 const redirectToLogin = async () => {
   auth.clear()
@@ -72,6 +102,13 @@ const loadChapters = async () => {
   chapters.value = Array.isArray(result) ? result : []
 }
 
+const loadEntities = async () => {
+  const result = await apiFetch<StoryEntity[]>(`/projects/${projectId.value}/entities`, {
+    method: 'GET'
+  })
+  entities.value = Array.isArray(result) ? result : []
+}
+
 const loadPage = async () => {
   pageLoading.value = true
   errorMessage.value = ''
@@ -84,7 +121,7 @@ const loadPage = async () => {
       return
     }
 
-    await Promise.all([loadProject(), loadChapters()])
+    await Promise.all([loadProject(), loadChapters(), loadEntities()])
   } catch (error: any) {
     console.error('Failed to load workspace:', error)
 
@@ -101,6 +138,21 @@ const loadPage = async () => {
   } finally {
     pageLoading.value = false
   }
+}
+
+const openCreateChapterModal = () => {
+  formErrorMessage.value = ''
+  successMessage.value = ''
+  showCreateChapterModal.value = true
+}
+
+const closeCreateChapterModal = () => {
+  if (creatingChapter.value) return
+
+  showCreateChapterModal.value = false
+  formErrorMessage.value = ''
+  createChapterForm.title = ''
+  createChapterForm.content = ''
 }
 
 const createChapter = async () => {
@@ -130,6 +182,7 @@ const createChapter = async () => {
       throw new Error('The server did not return the created chapter.')
     }
 
+    closeCreateChapterModal()
     await navigateTo(`/app/editor/${created.id}`)
   } catch (error: any) {
     console.error('Failed to create chapter:', error)
@@ -180,13 +233,13 @@ onMounted(async () => {
 
           <div class="stat-box gradient-purple">
             <v-icon icon="mdi-account-group-outline" size="32" color="#c084fc" />
-            <strong>—</strong>
+            <strong>{{ totalCharacters }}</strong>
             <span>Characters</span>
           </div>
 
           <div class="stat-box gradient-blue">
             <v-icon icon="mdi-map-marker-outline" size="32" color="#60a5fa" />
-            <strong>—</strong>
+            <strong>{{ totalLocations }}</strong>
             <span>Locations</span>
           </div>
 
@@ -202,41 +255,11 @@ onMounted(async () => {
             <div class="panel">
               <div class="card-head">
                 <h2>Chapters</h2>
-              </div>
 
-              <div class="chapter-create">
-                <div v-if="formErrorMessage" class="message error">
-                  {{ formErrorMessage }}
-                </div>
-
-                <div class="field-wrap">
-                  <label class="form-label" for="chapter-title">Chapter Title</label>
-                  <input
-                    id="chapter-title"
-                    v-model="createChapterForm.title"
-                    class="input-dark"
-                    placeholder="Enter chapter title"
-                    :disabled="creatingChapter"
-                  />
-                </div>
-
-                <div class="field-wrap">
-                  <label class="form-label" for="chapter-content">Content</label>
-                  <textarea
-                    id="chapter-content"
-                    v-model="createChapterForm.content"
-                    class="input-dark textarea-dark"
-                    placeholder="Start writing your chapter..."
-                    :disabled="creatingChapter"
-                  />
-                </div>
-
-                <div class="chapter-create-actions">
-                  <button class="btn-primary small-btn" :disabled="creatingChapter" @click="createChapter">
-                    <v-icon icon="mdi-plus" size="16" />
-                    {{ creatingChapter ? 'Creating...' : 'New Chapter' }}
-                  </button>
-                </div>
+                <button class="btn-primary small-btn" @click="openCreateChapterModal">
+                  <v-icon icon="mdi-plus" size="16" />
+                  New Chapter
+                </button>
               </div>
 
               <div v-if="chapters.length === 0" class="section-empty">
@@ -262,9 +285,20 @@ onMounted(async () => {
             </div>
 
             <div class="panel theme-card">
-              <h2>Themes</h2>
-              <div class="section-empty compact">
+              <div class="card-head theme-head">
+                <h2>Themes</h2>
+                <span class="count-pill">{{ themeEntries.length }}</span>
+              </div>
+
+              <div v-if="previewThemes.length === 0" class="section-empty compact">
                 <p>No extracted themes yet.</p>
+              </div>
+
+              <div v-else class="entity-preview-list">
+                <div v-for="theme in previewThemes" :key="theme.id" class="entity-preview-card">
+                  <h3>{{ theme.name }}</h3>
+                  <p>{{ theme.summary || 'No summary yet.' }}</p>
+                </div>
               </div>
             </div>
           </div>
@@ -273,27 +307,89 @@ onMounted(async () => {
             <div class="panel">
               <div class="card-head">
                 <h2>Characters</h2>
-                <button class="view-link">View All</button>
+                <span class="count-pill">{{ totalCharacters }}</span>
               </div>
 
-              <div class="section-empty compact">
+              <div v-if="previewCharacters.length === 0" class="section-empty compact">
                 <p>No characters available yet.</p>
+              </div>
+
+              <div v-else class="entity-preview-list">
+                <div v-for="character in previewCharacters" :key="character.id" class="entity-preview-card">
+                  <h3>{{ character.name }}</h3>
+                  <p>{{ character.summary || 'No summary yet.' }}</p>
+                </div>
               </div>
             </div>
 
             <div class="panel">
               <div class="card-head">
                 <h2>Locations</h2>
-                <button class="view-link">View All</button>
+                <span class="count-pill">{{ totalLocations }}</span>
               </div>
 
-              <div class="section-empty compact">
+              <div v-if="previewLocations.length === 0" class="section-empty compact">
                 <p>No locations available yet.</p>
+              </div>
+
+              <div v-else class="entity-preview-list">
+                <div v-for="location in previewLocations" :key="location.id" class="entity-preview-card">
+                  <h3>{{ location.name }}</h3>
+                  <p>{{ location.summary || 'No summary yet.' }}</p>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </template>
+    </div>
+
+    <div v-if="showCreateChapterModal" class="modal-backdrop" @click.self="closeCreateChapterModal">
+      <div class="modal panel">
+        <div class="modal-header">
+          <h2>Create Chapter</h2>
+          <button class="icon-btn" type="button" @click="closeCreateChapterModal" :disabled="creatingChapter">
+            <v-icon icon="mdi-close" size="20" />
+          </button>
+        </div>
+
+        <div v-if="formErrorMessage" class="message error modal-message">
+          {{ formErrorMessage }}
+        </div>
+
+        <div class="field-wrap">
+          <label class="form-label" for="chapter-title">Chapter Title</label>
+          <input
+            id="chapter-title"
+            v-model="createChapterForm.title"
+            class="input-dark"
+            placeholder="Enter chapter title"
+            :disabled="creatingChapter"
+          />
+        </div>
+
+        <div class="field-wrap">
+          <label class="form-label" for="chapter-content">Content</label>
+          <textarea
+            id="chapter-content"
+            v-model="createChapterForm.content"
+            class="input-dark textarea-dark"
+            placeholder="Start writing your chapter..."
+            :disabled="creatingChapter"
+          />
+        </div>
+
+        <div class="modal-actions">
+          <button class="btn-secondary" type="button" @click="closeCreateChapterModal" :disabled="creatingChapter">
+            Cancel
+          </button>
+
+          <button class="btn-primary small-btn" :disabled="creatingChapter" @click="createChapter">
+            <v-icon icon="mdi-plus" size="16" />
+            {{ creatingChapter ? 'Creating...' : 'Create Chapter' }}
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -340,6 +436,10 @@ onMounted(async () => {
   color: #86efac;
 }
 
+.modal-message {
+  margin-bottom: 16px;
+}
+
 .workspace-stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -383,6 +483,7 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
 }
 
 .card-head h2,
@@ -392,9 +493,26 @@ onMounted(async () => {
   font-size: 1.25rem;
 }
 
-.chapter-create {
-  padding: 24px;
+.theme-card {
+  padding: 0;
+}
+
+.theme-head {
   border-bottom: 1px solid #2e2e2e;
+}
+
+.count-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(79, 70, 229, 0.16);
+  color: #c7d2fe;
+  font-size: 0.85rem;
+  font-weight: 700;
 }
 
 .field-wrap {
@@ -414,11 +532,6 @@ onMounted(async () => {
   resize: vertical;
 }
 
-.chapter-create-actions {
-  display: flex;
-  justify-content: flex-end;
-}
-
 .small-btn {
   display: inline-flex;
   align-items: center;
@@ -431,10 +544,6 @@ onMounted(async () => {
   background: transparent;
   color: #818cf8;
   cursor: pointer;
-}
-
-.theme-card {
-  padding: 24px;
 }
 
 .section-empty {
@@ -498,11 +607,104 @@ onMounted(async () => {
   margin: 0 0 10px;
   color: #9ca3af;
   line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .chapter-card span {
   font-size: 0.8rem;
   color: #6b7280;
+}
+
+.entity-preview-list {
+  padding: 24px;
+  display: grid;
+  gap: 14px;
+}
+
+.entity-preview-card {
+  padding: 16px;
+  border: 1px solid #2e2e2e;
+  border-radius: 14px;
+  background: #181818;
+}
+
+.entity-preview-card h3 {
+  margin: 0 0 8px;
+  color: white;
+  font-size: 1rem;
+}
+
+.entity-preview-card p {
+  margin: 0;
+  color: #9ca3af;
+  line-height: 1.5;
+  font-size: 0.9rem;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  z-index: 50;
+}
+
+.modal {
+  width: min(760px, 100%);
+  border-radius: 20px;
+  padding: 24px;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.modal-header h2 {
+  margin: 0;
+  color: white;
+  font-size: 1.5rem;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.icon-btn {
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 10px;
+  background: #1f2937;
+  color: #d1d5db;
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.icon-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-secondary {
+  border: 1px solid #374151;
+  background: transparent;
+  color: white;
+  border-radius: 12px;
+  padding: 10px 16px;
+  cursor: pointer;
 }
 
 @media (max-width: 1100px) {
@@ -522,6 +724,11 @@ onMounted(async () => {
 
   .workspace-header h1 {
     font-size: 2.3rem;
+  }
+
+  .card-head {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 </style>
