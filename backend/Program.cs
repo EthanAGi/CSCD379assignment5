@@ -51,8 +51,7 @@ builder.Services.AddAuthentication(options =>
 })
 .AddJwtBearer(options =>
 {
-    // This is the key fix.
-    // Without this, ASP.NET may remap "sub" into a different claim type.
+    // Prevent automatic remapping of JWT claims like "sub"
     options.MapInboundClaims = false;
     options.RequireHttpsMetadata = false;
     options.SaveToken = true;
@@ -89,6 +88,7 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddScoped<IProjectService, ProjectService>();
 builder.Services.AddScoped<IChapterService, ChapterService>();
+builder.Services.AddScoped<IEntityService, EntityService>();
 
 var app = builder.Build();
 
@@ -100,7 +100,6 @@ if (app.Environment.IsDevelopment())
 
 app.UseCors("frontend");
 
-// Optional but normal to include
 app.UseAuthentication();
 app.UseAuthorization();
 
