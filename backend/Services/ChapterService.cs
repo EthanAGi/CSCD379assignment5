@@ -2,6 +2,7 @@ using CanonGuard.Api.Data;
 using CanonGuard.Api.DTOs;
 using CanonGuard.Api.Interfaces;
 using CanonGuard.Api.Models;
+using CanonGuard.Api.Services.AI;
 using Microsoft.EntityFrameworkCore;
 
 namespace CanonGuard.Api.Services;
@@ -9,10 +10,14 @@ namespace CanonGuard.Api.Services;
 public class ChapterService : IChapterService
 {
     private readonly AppDbContext _db;
+    private readonly ChapterEmbeddingService _chapterEmbeddingService;
 
-    public ChapterService(AppDbContext db)
+    public ChapterService(
+        AppDbContext db,
+        ChapterEmbeddingService chapterEmbeddingService)
     {
         _db = db;
+        _chapterEmbeddingService = chapterEmbeddingService;
     }
 
     public async Task<List<ChapterResponse>> GetForProjectAsync(string userId, int projectId)
@@ -92,6 +97,8 @@ public class ChapterService : IChapterService
         _db.Chapters.Add(chapter);
         await _db.SaveChangesAsync();
 
+        await _chapterEmbeddingService.RegenerateChapterEmbeddingsAsync(chapter.Id);
+
         return new ChapterResponse
         {
             Id = chapter.Id,
@@ -127,6 +134,8 @@ public class ChapterService : IChapterService
         chapter.UpdatedAt = DateTime.UtcNow;
 
         await _db.SaveChangesAsync();
+
+        await _chapterEmbeddingService.RegenerateChapterEmbeddingsAsync(chapter.Id);
 
         return new ChapterResponse
         {

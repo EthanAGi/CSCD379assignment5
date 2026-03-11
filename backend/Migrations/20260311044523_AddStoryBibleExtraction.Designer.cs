@@ -4,6 +4,7 @@ using CanonGuard.Api.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace CanonGuard.Api.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260311044523_AddStoryBibleExtraction")]
+    partial class AddStoryBibleExtraction
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -117,10 +120,6 @@ namespace CanonGuard.Api.Migrations
 
                     b.HasIndex("ProjectId");
 
-                    b.HasIndex("ProjectId", "CreatedAt");
-
-                    b.HasIndex("ProjectId", "UpdatedAt");
-
                     b.ToTable("Chapters");
                 });
 
@@ -150,12 +149,6 @@ namespace CanonGuard.Api.Migrations
                         .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("ChapterId");
-
-                    b.HasIndex("ProjectId");
-
-                    b.HasIndex("ProjectId", "CreatedAt");
 
                     b.ToTable("Embeddings");
                 });
@@ -187,8 +180,6 @@ namespace CanonGuard.Api.Migrations
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("ProjectId");
 
                     b.HasIndex("ProjectId", "Type", "Name")
                         .IsUnique();
@@ -234,12 +225,6 @@ namespace CanonGuard.Api.Migrations
 
                     b.HasIndex("EntityId");
 
-                    b.HasIndex("ProjectId");
-
-                    b.HasIndex("SourceChapterId");
-
-                    b.HasIndex("ProjectId", "FactType");
-
                     b.ToTable("Facts");
                 });
 
@@ -255,8 +240,7 @@ namespace CanonGuard.Api.Migrations
                         .HasColumnType("datetime2");
 
                     b.Property<string>("Description")
-                        .HasMaxLength(2000)
-                        .HasColumnType("nvarchar(2000)");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("OwnerId")
                         .IsRequired()
@@ -270,8 +254,6 @@ namespace CanonGuard.Api.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("OwnerId");
-
-                    b.HasIndex("OwnerId", "CreatedAt");
 
                     b.ToTable("Projects");
                 });
@@ -420,20 +402,6 @@ namespace CanonGuard.Api.Migrations
                     b.Navigation("Project");
                 });
 
-            modelBuilder.Entity("CanonGuard.Api.Models.Embedding", b =>
-                {
-                    b.HasOne("CanonGuard.Api.Models.Chapter", null)
-                        .WithMany()
-                        .HasForeignKey("ChapterId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("CanonGuard.Api.Models.Project", null)
-                        .WithMany()
-                        .HasForeignKey("ProjectId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("CanonGuard.Api.Models.Entity", b =>
                 {
                     b.HasOne("CanonGuard.Api.Models.Project", "Project")
@@ -450,19 +418,7 @@ namespace CanonGuard.Api.Migrations
                     b.HasOne("CanonGuard.Api.Models.Entity", "Entity")
                         .WithMany()
                         .HasForeignKey("EntityId")
-                        .OnDelete(DeleteBehavior.NoAction);
-
-                    b.HasOne("CanonGuard.Api.Models.Project", null)
-                        .WithMany()
-                        .HasForeignKey("ProjectId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("CanonGuard.Api.Models.Chapter", null)
-                        .WithMany()
-                        .HasForeignKey("SourceChapterId")
-                        .OnDelete(DeleteBehavior.NoAction)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Entity");
                 });

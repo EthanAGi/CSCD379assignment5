@@ -1,13 +1,15 @@
 using System.Text;
+using System.IdentityModel.Tokens.Jwt;
 using CanonGuard.Api.Data;
-using CanonGuard.Api.Models;
 using CanonGuard.Api.Interfaces;
+using CanonGuard.Api.Models;
+using CanonGuard.Api.Models.Configuration;
 using CanonGuard.Api.Services;
+using CanonGuard.Api.Services.AI;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using System.IdentityModel.Tokens.Jwt;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -86,9 +88,27 @@ builder.Services.AddCors(options =>
     });
 });
 
+// Existing app services
 builder.Services.AddScoped<IProjectService, ProjectService>();
 builder.Services.AddScoped<IChapterService, ChapterService>();
 builder.Services.AddScoped<IEntityService, EntityService>();
+
+// Azure AI configuration
+builder.Services.Configure<AzureAiOptions>(
+    builder.Configuration.GetSection("AzureAI"));
+
+// New Azure AI services
+builder.Services.AddHttpClient<EmbeddingService>();
+builder.Services.AddHttpClient<AzureChapterExtractionService>();
+builder.Services.AddScoped<ChapterEmbeddingService>();
+builder.Services.AddScoped<SemanticSearchService>();
+
+// Existing Story Bible services
+// Keep these for now if StoryBibleService still depends on IChapterAiClient / FoundryChapterAiClient.
+// Once we rewrite StoryBibleService to use AzureChapterExtractionService directly,
+// these two lines can be removed.
+builder.Services.AddHttpClient<IChapterAiClient, FoundryChapterAiClient>();
+builder.Services.AddScoped<IStoryBibleService, StoryBibleService>();
 
 var app = builder.Build();
 
