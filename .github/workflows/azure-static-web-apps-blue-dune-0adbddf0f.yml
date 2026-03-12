@@ -34,9 +34,8 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: upload
           app_location: "frontend"
-          api_location: ""
-          output_location: "dist"
-          app_build_command: "npm install && npm run generate"
+          api_location: ".output/server/functions"
+          output_location: ".output/public"
 
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
