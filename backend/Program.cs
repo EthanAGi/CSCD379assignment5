@@ -18,7 +18,16 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("DefaultConnection"),
+        sqlOptions =>
+        {
+            sqlOptions.EnableRetryOnFailure(
+                maxRetryCount: 5,
+                maxRetryDelay: TimeSpan.FromSeconds(10),
+                errorNumbersToAdd: null
+            );
+        }));
 
 builder.Services
     .AddIdentity<AppUser, IdentityRole>(options =>
@@ -71,16 +80,19 @@ builder.Services.AddAuthentication(options =>
 
 builder.Services.AddAuthorization();
 
+const string corsPolicyName = "frontend";
+
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("frontend", policy =>
+    options.AddPolicy(corsPolicyName, policy =>
     {
         policy
             .WithOrigins(
                 "http://localhost:3000",
                 "http://localhost:3001",
                 "http://127.0.0.1:3000",
-                "http://127.0.0.1:3001"
+                "http://127.0.0.1:3001",
+                "https://blue-dune-0adbddf0f.2.azurestaticapps.net"
             )
             .AllowAnyHeader()
             .AllowAnyMethod();
@@ -111,8 +123,8 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseCors("frontend");
-
+app.UseHttpsRedirection();
+app.UseCors(corsPolicyName);
 app.UseAuthentication();
 app.UseAuthorization();
 
