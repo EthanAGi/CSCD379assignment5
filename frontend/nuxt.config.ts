@@ -1,6 +1,9 @@
 export default defineNuxtConfig({
   compatibilityDate: '2026-03-09',
+
   devtools: { enabled: true },
+
+  ssr: false,
 
   css: [
     'vuetify/styles',
@@ -10,12 +13,6 @@ export default defineNuxtConfig({
 
   build: {
     transpile: ['vuetify']
-  },
-
-  vite: {
-    ssr: {
-      noExternal: ['vuetify']
-    }
   },
 
   runtimeConfig: {
