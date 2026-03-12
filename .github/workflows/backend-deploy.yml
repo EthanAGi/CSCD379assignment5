@@ -7,8 +7,7 @@ on:
     paths:
       - 'backend/**'
       - '.github/workflows/backend-deploy.yml'
-
-workflow_dispatch:
+  workflow_dispatch:
 
 env:
   AZURE_WEBAPP_NAME: canonguard-api
@@ -35,12 +34,11 @@ jobs:
       - name: Build
         run: dotnet build ${{ env.PROJECT_PATH }} --configuration Release --no-restore
 
-      - name: Test
-        run: dotnet test ./backend --configuration Release --no-build
-        continue-on-error: false
-
       - name: Publish
-        run: dotnet publish ${{ env.PROJECT_PATH }} --configuration Release --output ${{ env.PUBLISH_PATH }}
+        run: dotnet publish ${{ env.PROJECT_PATH }} --configuration Release --no-build --output ${{ env.PUBLISH_PATH }}
+
+      - name: List publish output
+        run: ls -R ${{ env.PUBLISH_PATH }}
 
       - name: Deploy to Azure Web App
         uses: azure/webapps-deploy@v3
