@@ -18,6 +18,7 @@
     "vuetify": "^4.0.1"
   },
   "devDependencies": {
+    "@types/node": "^25.5.0",
     "sass": "^1.97.3"
   }
 }
