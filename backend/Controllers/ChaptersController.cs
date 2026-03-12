@@ -13,10 +13,14 @@ namespace CanonGuard.Api.Controllers;
 public class ChaptersController : ControllerBase
 {
     private readonly IChapterService _chapters;
+    private readonly IStoryBibleService _storyBibleService;
 
-    public ChaptersController(IChapterService chapters)
+    public ChaptersController(
+        IChapterService chapters,
+        IStoryBibleService storyBibleService)
     {
         _chapters = chapters;
+        _storyBibleService = storyBibleService;
     }
 
     private string? GetUserId()
@@ -103,5 +107,43 @@ public class ChaptersController : ControllerBase
         }
 
         return Ok(updated);
+    }
+
+    [HttpPost("chapters/{chapterId:int}/extract-entities")]
+    public async Task<IActionResult> ExtractEntities(
+        int chapterId,
+        CancellationToken cancellationToken)
+    {
+        var userId = GetUserId();
+        if (userId == null)
+        {
+            return Unauthorized();
+        }
+
+        try
+        {
+            var result = await _storyBibleService.ExtractFromChapterAsync(
+                userId,
+                chapterId,
+                cancellationToken);
+
+            if (result == null)
+            {
+                return NotFound(new { message = "Chapter not found." });
+            }
+
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (Exception)
+        {
+            return StatusCode(500, new
+            {
+                message = "An unexpected error occurred while extracting entities."
+            });
+        }
     }
 }

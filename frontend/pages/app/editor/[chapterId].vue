@@ -28,6 +28,15 @@ type ChapterEntityExtractionResponse = {
   locations: ExtractedEntity[]
 }
 
+type StoryBibleEntity = {
+  id: number
+  projectId: number
+  type: string
+  name: string
+  summary: string
+  updatedAt: string
+}
+
 const route = useRoute()
 const { apiFetch } = useApi()
 const auth = useAuth()
@@ -43,6 +52,7 @@ const fontFamily = ref('Georgia')
 const loading = ref(true)
 const saving = ref(false)
 const extracting = ref(false)
+const loadingChapterEntities = ref(false)
 const errorMessage = ref('')
 const successMessage = ref('')
 
@@ -164,6 +174,131 @@ const applyFontFamily = () => {
   runCommand('fontName', fontFamily.value)
 }
 
+const normalizeExtractedEntity = (item: any): ExtractedEntity | null => {
+  const name = String(item?.name ?? item?.Name ?? '').trim()
+  if (!name) return null
+
+  return {
+    name,
+    sourceQuote: String(item?.sourceQuote ?? item?.SourceQuote ?? '').trim(),
+    confidence: Number(item?.confidence ?? item?.Confidence ?? 0) || 0
+  }
+}
+
+const normalizeExtractionResponse = (raw: any): ChapterEntityExtractionResponse => {
+  const rawCharacters = Array.isArray(raw?.characters)
+    ? raw.characters
+    : Array.isArray(raw?.Characters)
+      ? raw.Characters
+      : []
+
+  const rawLocations = Array.isArray(raw?.locations)
+    ? raw.locations
+    : Array.isArray(raw?.Locations)
+      ? raw.Locations
+      : []
+
+  return {
+    chapterId: Number(raw?.chapterId ?? raw?.ChapterId ?? 0),
+    projectId: Number(raw?.projectId ?? raw?.ProjectId ?? 0),
+    characters: rawCharacters
+      .map(normalizeExtractedEntity)
+      .filter((item: ExtractedEntity | null): item is ExtractedEntity => item !== null),
+    locations: rawLocations
+      .map(normalizeExtractedEntity)
+      .filter((item: ExtractedEntity | null): item is ExtractedEntity => item !== null)
+  }
+}
+
+const normalizeStoryBibleEntity = (item: any): StoryBibleEntity | null => {
+  const id = Number(item?.id ?? item?.Id ?? 0)
+  const projectId = Number(item?.projectId ?? item?.ProjectId ?? 0)
+  const type = String(item?.type ?? item?.Type ?? '').trim()
+  const name = String(item?.name ?? item?.Name ?? '').trim()
+
+  if (!id || !projectId || !type || !name) return null
+
+  return {
+    id,
+    projectId,
+    type,
+    name,
+    summary: String(item?.summary ?? item?.Summary ?? '').trim(),
+    updatedAt: String(item?.updatedAt ?? item?.UpdatedAt ?? '')
+  }
+}
+
+const dedupeEntitiesByName = (items: ExtractedEntity[]) => {
+  const seen = new Set<string>()
+  return items.filter(item => {
+    const key = item.name.trim().toLowerCase()
+    if (!key || seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+const chapterContainsEntity = (chapterText: string, entityName: string) => {
+  const trimmedText = chapterText.trim()
+  const trimmedName = entityName.trim()
+
+  if (!trimmedText || !trimmedName) return false
+
+  const escapedName = escapeRegExp(trimmedName).replace(/\s+/g, '\\s+')
+  const regex = new RegExp(`\\b${escapedName}\\b`, 'i')
+  return regex.test(trimmedText)
+}
+
+const loadStoryBibleMatchesForChapter = async () => {
+  if (!chapter.value?.projectId) return
+
+  loadingChapterEntities.value = true
+
+  try {
+    const rawEntities = await apiFetch<any[]>(`/projects/${chapter.value.projectId}/entities`, {
+      method: 'GET'
+    })
+
+    const allEntities = (rawEntities ?? [])
+      .map(normalizeStoryBibleEntity)
+      .filter((item: StoryBibleEntity | null): item is StoryBibleEntity => item !== null)
+
+    const text = editorText.value
+
+    const matchingCharacters: ExtractedEntity[] = allEntities
+      .filter(entity => entity.type.toLowerCase() === 'character')
+      .filter(entity => chapterContainsEntity(text, entity.name))
+      .map(entity => ({
+        name: entity.name,
+        sourceQuote: '',
+        confidence: 1
+      }))
+
+    const matchingLocations: ExtractedEntity[] = allEntities
+      .filter(entity => entity.type.toLowerCase() === 'location')
+      .filter(entity => chapterContainsEntity(text, entity.name))
+      .map(entity => ({
+        name: entity.name,
+        sourceQuote: '',
+        confidence: 1
+      }))
+
+    detectedCharacters.value = dedupeEntitiesByName(matchingCharacters)
+    detectedLocations.value = dedupeEntitiesByName(matchingLocations)
+  } catch (error: any) {
+    console.error('Failed to load chapter entities:', error)
+
+    if (error?.status === 401 || error?.data?.status === 401) {
+      await redirectToLogin()
+      return
+    }
+  } finally {
+    loadingChapterEntities.value = false
+  }
+}
+
 const saveChapterInternal = async (showSuccessMessage = true) => {
   const trimmedTitle = title.value.trim()
 
@@ -194,6 +329,7 @@ const saveChapterInternal = async (showSuccessMessage = true) => {
         : plainTextToHtml(updated.content ?? '')
 
     await writeEditorContentToDom()
+    await loadStoryBibleMatchesForChapter()
 
     if (showSuccessMessage) {
       successMessage.value = 'Chapter saved successfully.'
@@ -247,6 +383,7 @@ const loadChapter = async () => {
 
     loading.value = false
     await writeEditorContentToDom()
+    await loadStoryBibleMatchesForChapter()
     return
   } catch (error: any) {
     console.error('Failed to load chapter:', error)
@@ -283,23 +420,44 @@ const extractEntities = async () => {
     return
   }
 
+  syncEditorFromDom()
+
+  if (!title.value.trim()) {
+    errorMessage.value = 'Chapter title is required.'
+    return
+  }
+
+  if (!editorText.value.trim()) {
+    errorMessage.value = 'Chapter content is required before extraction.'
+    return
+  }
+
   extracting.value = true
+  detectedCharacters.value = []
+  detectedLocations.value = []
 
   try {
     const saved = await saveChapterInternal(false)
     if (!saved) return
 
-    const result = await apiFetch<ChapterEntityExtractionResponse>(
+    const rawResult = await apiFetch<any>(
       `/chapters/${chapterId.value}/extract-entities`,
       {
         method: 'POST'
       }
     )
 
-    detectedCharacters.value = result.characters ?? []
-    detectedLocations.value = result.locations ?? []
+    const result = normalizeExtractionResponse(rawResult)
 
-    successMessage.value = 'AI extraction completed successfully.'
+    detectedCharacters.value = dedupeEntitiesByName(result.characters)
+    detectedLocations.value = dedupeEntitiesByName(result.locations)
+
+    await loadStoryBibleMatchesForChapter()
+
+    successMessage.value =
+      result.characters.length || result.locations.length
+        ? 'AI extraction completed successfully.'
+        : 'AI extraction completed, but no characters or locations were found.'
   } catch (error: any) {
     console.error('Failed to extract entities:', error)
 
@@ -541,19 +699,13 @@ onMounted(async () => {
 
           <div v-if="detectedCharacters.length" class="detected-list">
             <div
-              v-for="character in detectedCharacters"
-              :key="`char-${character.name}`"
+              v-for="(character, index) in detectedCharacters"
+              :key="`char-${character.name}-${index}`"
               class="detected-pill purple"
             >
               <span class="pill-badge">{{ character.name.charAt(0) }}</span>
               <div class="detected-content">
                 <span class="detected-name">{{ character.name }}</span>
-                <small class="detected-meta">
-                  {{ Math.round((character.confidence || 0) * 100) }}% confidence
-                </small>
-                <small v-if="character.sourceQuote" class="detected-quote">
-                  “{{ character.sourceQuote }}”
-                </small>
               </div>
             </div>
           </div>
@@ -568,8 +720,8 @@ onMounted(async () => {
 
           <div v-if="detectedLocations.length" class="detected-list">
             <div
-              v-for="location in detectedLocations"
-              :key="`loc-${location.name}`"
+              v-for="(location, index) in detectedLocations"
+              :key="`loc-${location.name}-${index}`"
               class="detected-pill green"
             >
               <span class="pill-badge">
@@ -577,12 +729,6 @@ onMounted(async () => {
               </span>
               <div class="detected-content">
                 <span class="detected-name">{{ location.name }}</span>
-                <small class="detected-meta">
-                  {{ Math.round((location.confidence || 0) * 100) }}% confidence
-                </small>
-                <small v-if="location.sourceQuote" class="detected-quote">
-                  “{{ location.sourceQuote }}”
-                </small>
               </div>
             </div>
           </div>
@@ -952,7 +1098,7 @@ onMounted(async () => {
 
 .detected-pill {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
   padding: 10px 12px;
   border-radius: 12px;
@@ -982,8 +1128,6 @@ onMounted(async () => {
 }
 
 .detected-content {
-  display: grid;
-  gap: 4px;
   min-width: 0;
 }
 
@@ -991,17 +1135,6 @@ onMounted(async () => {
   color: white;
   font-size: 0.9rem;
   font-weight: 600;
-}
-
-.detected-meta {
-  color: #9ca3af;
-  font-size: 0.75rem;
-}
-
-.detected-quote {
-  color: #d1d5db;
-  font-size: 0.75rem;
-  line-height: 1.45;
 }
 
 .empty-detected {

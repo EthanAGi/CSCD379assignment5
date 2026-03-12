@@ -123,8 +123,18 @@ public class EntityService : IEntityService
             return false;
         }
 
+        var relatedFacts = await _db.Facts
+            .Where(f => f.EntityId == entityId)
+            .ToListAsync();
+
+        if (relatedFacts.Count > 0)
+        {
+            _db.Facts.RemoveRange(relatedFacts);
+        }
+
         _db.Entities.Remove(entity);
         await _db.SaveChangesAsync();
+
         return true;
     }
 

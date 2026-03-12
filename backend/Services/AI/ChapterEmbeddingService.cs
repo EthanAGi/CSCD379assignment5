@@ -41,7 +41,14 @@ public class ChapterEmbeddingService
             await _db.SaveChangesAsync(cancellationToken);
         }
 
-        var chunks = TextChunker.ChunkText(chapter.Content);
+        var chunks = TextChunker.ChunkText(chapter.Content)
+            .Where(chunk => !string.IsNullOrWhiteSpace(chunk))
+            .ToList();
+
+        _logger.LogInformation(
+            "Regenerating embeddings for chapter {ChapterId} with {ChunkCount} chunks.",
+            chapter.Id,
+            chunks.Count);
 
         foreach (var chunk in chunks)
         {
@@ -55,6 +62,9 @@ public class ChapterEmbeddingService
                 VectorJson = JsonSerializer.Serialize(vector),
                 CreatedAt = DateTime.UtcNow
             });
+
+            // Small throttle to reduce Azure rate-limit spikes on lower tiers.
+            await Task.Delay(250, cancellationToken);
         }
 
         await _db.SaveChangesAsync(cancellationToken);

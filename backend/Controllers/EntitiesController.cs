@@ -100,13 +100,24 @@ public class EntitiesController : ControllerBase
             return Unauthorized();
         }
 
-        var deleted = await _entities.DeleteAsync(userId, entityId);
-
-        if (!deleted)
+        try
         {
-            return NotFound(new { message = "Entity not found." });
-        }
+            var deleted = await _entities.DeleteAsync(userId, entityId);
 
-        return Ok(new { message = "Entity deleted successfully." });
+            if (!deleted)
+            {
+                return NotFound(new { message = "Entity not found." });
+            }
+
+            return Ok(new { message = "Entity deleted successfully." });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new
+            {
+                message = "Failed to delete entity.",
+                detail = ex.Message
+            });
+        }
     }
 }

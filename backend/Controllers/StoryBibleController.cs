@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace CanonGuard.Api.Controllers;
 
 [ApiController]
-[Route("api/chapters")]
+[Route("api/story-bible")]
 [Authorize]
 public class StoryBibleController : ControllerBase
 {
@@ -24,7 +24,7 @@ public class StoryBibleController : ControllerBase
             ?? User.FindFirstValue(ClaimTypes.NameIdentifier);
     }
 
-    [HttpPost("{chapterId:int}/extract-entities")]
+    [HttpPost("chapters/{chapterId:int}/extract-entities")]
     public async Task<IActionResult> ExtractEntities(
         int chapterId,
         CancellationToken cancellationToken)

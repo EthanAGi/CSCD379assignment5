@@ -3,6 +3,7 @@ namespace CanonGuard.Api.Services.AI;
 public class AiExtractedEntity
 {
     public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
     public string SourceQuote { get; set; } = string.Empty;
     public double Confidence { get; set; }
 }
