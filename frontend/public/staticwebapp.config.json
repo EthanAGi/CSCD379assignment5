@@ -3,6 +3,7 @@
     "rewrite": "/index.html",
     "exclude": [
       "/assets/*",
+      "/_nuxt/*",
       "/*.css",
       "/*.js",
       "/*.png",
@@ -11,7 +12,8 @@
       "/*.gif",
       "/*.svg",
       "/*.ico",
-      "/_nuxt/*"
+      "/*.webp",
+      "/*.json"
     ]
   }
 }
