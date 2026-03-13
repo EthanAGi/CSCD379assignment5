@@ -64,32 +64,6 @@ onMounted(async () => {
 
           <div class="hero-actions">
             <NuxtLink to="/login" class="btn-primary hero-btn">Get Started Free</NuxtLink>
-            <button type="button" class="btn-ghost hero-btn">Watch Demo</button>
-          </div>
-        </div>
-
-        <div class="dashboard-preview panel">
-          <div class="preview-topbar">
-            <span class="dot red" />
-            <span class="dot yellow" />
-            <span class="dot green" />
-          </div>
-
-          <div class="preview-content">
-            <div class="preview-sidebar">
-              <div class="preview-line active" />
-              <div class="preview-line" />
-              <div class="preview-line short" />
-            </div>
-
-            <div class="preview-main">
-              <div class="preview-header" />
-              <div class="preview-grid">
-                <div class="preview-card gradient-indigo" />
-                <div class="preview-card gradient-purple" />
-                <div class="preview-card gradient-blue" />
-              </div>
-            </div>
           </div>
         </div>
       </div>
@@ -251,90 +225,6 @@ onMounted(async () => {
   font-size: 1.05rem;
 }
 
-.dashboard-preview {
-  margin-top: 80px;
-  overflow: hidden;
-  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.45);
-}
-
-.preview-topbar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 14px 16px;
-  background: #2a2a2a;
-  border-bottom: 1px solid #374151;
-}
-
-.dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 999px;
-}
-
-.red {
-  background: #ef4444;
-}
-
-.yellow {
-  background: #f59e0b;
-}
-
-.green {
-  background: #22c55e;
-}
-
-.preview-content {
-  display: flex;
-  gap: 16px;
-  padding: 32px;
-}
-
-.preview-sidebar {
-  width: 192px;
-  background: #252525;
-  border-radius: 12px;
-  padding: 16px;
-}
-
-.preview-line {
-  height: 12px;
-  border-radius: 999px;
-  background: #374151;
-  margin-bottom: 10px;
-}
-
-.preview-line.active {
-  background: #4f46e5;
-  width: 75%;
-}
-
-.preview-line.short {
-  width: 82%;
-}
-
-.preview-main {
-  flex: 1;
-}
-
-.preview-header {
-  height: 48px;
-  background: #252525;
-  border-radius: 12px;
-  margin-bottom: 16px;
-}
-
-.preview-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-}
-
-.preview-card {
-  height: 128px;
-  border-radius: 12px;
-}
-
 .features,
 .benefits {
   padding: 96px 0;
@@ -444,25 +334,16 @@ onMounted(async () => {
   .feature-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-
-  .preview-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
 @media (max-width: 760px) {
   .header-inner,
-  .footer-inner,
-  .preview-content {
+  .footer-inner {
     flex-direction: column;
   }
 
   .header-actions {
     margin-top: 16px;
-  }
-
-  .preview-sidebar {
-    width: 100%;
   }
 
   .feature-grid {
