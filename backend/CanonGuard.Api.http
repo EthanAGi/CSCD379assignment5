@@ -1,0 +1,6 @@
+@CanonGuard.Api_HostAddress = http://localhost:5140
+
+GET {{CanonGuard.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
