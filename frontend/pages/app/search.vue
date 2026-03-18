@@ -676,9 +676,19 @@ onMounted(async () => {
   background: #252525;
 }
 
+@media (max-width: 960px) {
+  .search-page {
+    padding: 24px 16px;
+  }
+}
+
 @media (max-width: 760px) {
   .search-page {
-    padding: 20px;
+    padding: 20px 12px;
+  }
+
+  .search-header h1 {
+    font-size: 2.3rem;
   }
 
   .scope-row,

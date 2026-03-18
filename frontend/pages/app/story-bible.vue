@@ -1027,10 +1027,20 @@ onMounted(async () => {
   cursor: pointer;
 }
 
+@media (max-width: 960px) {
+  .story-page {
+    padding: 24px 0;
+  }
+}
+
 @media (max-width: 760px) {
   .story-header {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .story-header h1 {
+    font-size: 2.3rem;
   }
 
   .toolbar-row {

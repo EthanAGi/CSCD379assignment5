@@ -828,7 +828,7 @@ onMounted(async () => {
           @click="extractEntities"
         >
           <v-icon icon="mdi-robot-outline" size="16" />
-          {{ extracting ? 'Extracting...' : checkingCanon ? 'Checking Canon...' : 'Extract AI' }}
+          <span class="btn-label">{{ extracting ? 'Extracting...' : checkingCanon ? 'Checking Canon...' : 'Extract AI' }}</span>
         </button>
 
         <button
@@ -837,7 +837,7 @@ onMounted(async () => {
           @click="saveChapter"
         >
           <v-icon icon="mdi-content-save-outline" size="16" />
-          {{ saving ? 'Saving...' : 'Save' }}
+          <span class="btn-label">{{ saving ? 'Saving...' : 'Save' }}</span>
         </button>
       </div>
     </div>
@@ -1485,6 +1485,103 @@ onMounted(async () => {
     width: 100%;
     border-left: 0;
     border-top: 1px solid #1f2937;
+  }
+}
+
+@media (max-width: 960px) {
+  .editor-page {
+    height: auto;
+    min-height: 100vh;
+  }
+
+  .editor-header {
+    flex-wrap: wrap;
+    padding: 12px 16px;
+    gap: 10px;
+  }
+
+  .header-left {
+    flex: 1 1 100%;
+  }
+
+  .chapter-title-input {
+    width: 100%;
+    font-size: 1rem;
+  }
+
+  .editor-header p {
+    display: none;
+  }
+
+  .header-right {
+    flex: 1 1 100%;
+    justify-content: flex-end;
+  }
+
+  .header-right span {
+    margin-right: auto;
+  }
+
+  .extract-btn .btn-label,
+  .save-btn .btn-label {
+    display: none;
+  }
+
+  .toolbar {
+    padding: 8px 12px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .tool-row {
+    flex-wrap: nowrap;
+    gap: 2px;
+    min-width: max-content;
+  }
+
+  .toolbar-group {
+    gap: 4px;
+    padding: 0 2px;
+  }
+
+  .toolbar-select {
+    min-width: 90px;
+    font-size: 0.8rem;
+    height: 30px;
+    padding: 0 6px;
+  }
+
+  .toolbar-select-btn,
+  .icon-btn {
+    width: 30px;
+    height: 30px;
+  }
+
+  .tool-sep {
+    height: 20px;
+    margin: 0 3px;
+  }
+
+  .font-size {
+    width: 26px;
+    font-size: 0.8rem;
+  }
+
+  .editor-surface {
+    padding: 16px;
+  }
+
+  .editor-content {
+    min-height: 400px;
+    font-size: 1rem;
+  }
+
+  .editor-side {
+    display: none;
+  }
+
+  .message {
+    margin: 8px 12px 0;
   }
 }
 </style>

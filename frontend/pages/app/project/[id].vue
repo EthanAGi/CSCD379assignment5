@@ -772,6 +772,12 @@ onMounted(async () => {
   }
 }
 
+@media (max-width: 960px) {
+  .workspace-page {
+    padding: 24px 0;
+  }
+}
+
 @media (max-width: 760px) {
   .workspace-stats {
     grid-template-columns: 1fr;

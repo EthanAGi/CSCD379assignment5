@@ -723,6 +723,12 @@ onMounted(async () => {
   }
 }
 
+@media (max-width: 960px) {
+  .dashboard-page {
+    padding: 24px 0;
+  }
+}
+
 @media (max-width: 760px) {
   .stats-grid,
   .project-grid {
