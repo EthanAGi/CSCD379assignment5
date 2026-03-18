@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'backend/**'
+      - 'backend.Tests/**'
       - '.github/workflows/backend-deploy.yml'
   workflow_dispatch:
 
@@ -33,6 +34,9 @@ jobs:
 
       - name: Build
         run: dotnet build ${{ env.PROJECT_PATH }} --configuration Release --no-restore
+
+      - name: Run backend tests
+        run: dotnet test ./backend.Tests/CanonGuard.Tests.csproj --configuration Release --no-restore --verbosity normal
 
       - name: Publish
         run: dotnet publish ${{ env.PROJECT_PATH }} --configuration Release --no-build --output ${{ env.PUBLISH_PATH }}
