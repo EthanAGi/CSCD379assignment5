@@ -152,7 +152,7 @@ public class ChaptersController : ControllerBase
     }
 
     [HttpPost("chapters/{chapterId:int}/canon-checks")]
-    public async Task<ActionResult<CanonCheckResponse>> CheckCanon(
+    public async Task<IActionResult> CheckCanon(
         int chapterId,
         CancellationToken cancellationToken)
     {
