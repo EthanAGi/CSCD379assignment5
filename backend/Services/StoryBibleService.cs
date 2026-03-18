@@ -454,6 +454,11 @@ public class StoryBibleService : IStoryBibleService
         return AreEquivalentCharacterNames(left, right);
     }
 
+    private static bool AreEquivalentLocationNames(string left, string right)
+    {
+        return AreEquivalentSimplePhrases(left, right);
+    }
+
     private static bool AreEquivalentSimplePhrases(string left, string right)
     {
         var l = NormalizeSimplePhrase(left);
