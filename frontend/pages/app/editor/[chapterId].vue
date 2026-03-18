@@ -74,6 +74,7 @@ const errorMessage = ref('')
 const successMessage = ref('')
 
 const editorRef = ref<HTMLElement | null>(null)
+const savedRange = ref<Range | null>(null)
 
 const detectedCharacters = ref<ExtractedEntity[]>([])
 const detectedLocations = ref<ExtractedEntity[]>([])
@@ -168,6 +169,47 @@ const stripCanonMarkupFromHtml = (html: string) => {
   return temp.innerHTML
 }
 
+const selectionInsideEditor = () => {
+  if (!editorRef.value || typeof window === 'undefined') return false
+
+  const selection = window.getSelection()
+  if (!selection || selection.rangeCount === 0) return false
+
+  const range = selection.getRangeAt(0)
+  const commonNode =
+    range.commonAncestorContainer.nodeType === Node.TEXT_NODE
+      ? range.commonAncestorContainer.parentNode
+      : range.commonAncestorContainer
+
+  return !!commonNode && editorRef.value.contains(commonNode)
+}
+
+const saveSelection = () => {
+  if (typeof window === 'undefined' || !editorRef.value) return
+
+  const selection = window.getSelection()
+  if (!selection || selection.rangeCount === 0) return
+
+  const range = selection.getRangeAt(0)
+  const commonNode =
+    range.commonAncestorContainer.nodeType === Node.TEXT_NODE
+      ? range.commonAncestorContainer.parentNode
+      : range.commonAncestorContainer
+
+  if (!commonNode || !editorRef.value.contains(commonNode)) return
+
+  savedRange.value = range.cloneRange()
+}
+
+const restoreSelection = () => {
+  if (typeof window === 'undefined' || !savedRange.value) return
+  const selection = window.getSelection()
+  if (!selection) return
+
+  selection.removeAllRanges()
+  selection.addRange(savedRange.value)
+}
+
 const syncEditorFromDom = () => {
   if (!editorRef.value) return
 
@@ -185,22 +227,66 @@ const writeEditorContentToDom = async () => {
 }
 
 const focusEditor = () => {
-  nextTick(() => {
-    editorRef.value?.focus()
+  editorRef.value?.focus()
+}
+
+const normalizeFontTags = () => {
+  if (!editorRef.value) return
+
+  const legacyFonts = editorRef.value.querySelectorAll('font')
+  legacyFonts.forEach(node => {
+    const font = node as HTMLElement
+    const span = document.createElement('span')
+
+    const face = font.getAttribute('face')
+    const color = font.getAttribute('color')
+    const size = font.getAttribute('size')
+
+    if (face) {
+      span.style.fontFamily = face
+    }
+
+    if (color) {
+      span.style.color = color
+    }
+
+    if (size) {
+      const mappedSize =
+        size === '1' ? '10px' :
+        size === '2' ? '13px' :
+        size === '3' ? '16px' :
+        size === '4' ? '18px' :
+        size === '5' ? '24px' :
+        size === '6' ? '32px' :
+        '48px'
+
+      span.style.fontSize = mappedSize
+    }
+
+    while (font.firstChild) {
+      span.appendChild(font.firstChild)
+    }
+
+    font.parentNode?.replaceChild(span, font)
   })
 }
 
 const runCommand = (command: string, value?: string) => {
   focusEditor()
+  restoreSelection()
   document.execCommand('styleWithCSS', false, 'true')
   document.execCommand(command, false, value)
+  normalizeFontTags()
   syncEditorFromDom()
+  saveSelection()
 }
 
 const setBlock = (tag: 'p' | 'h1' | 'h2' | 'blockquote') => {
   focusEditor()
+  restoreSelection()
   document.execCommand('formatBlock', false, tag)
   syncEditorFromDom()
+  saveSelection()
 }
 
 const insertLink = () => {
@@ -211,17 +297,46 @@ const insertLink = () => {
 
 const clearFormatting = () => {
   focusEditor()
+  restoreSelection()
   document.execCommand('removeFormat')
   document.execCommand('unlink')
+  normalizeFontTags()
   syncEditorFromDom()
+  saveSelection()
+}
+
+const applyFontSize = (size: number) => {
+  fontSize.value = Math.max(12, Math.min(32, size))
+
+  focusEditor()
+  restoreSelection()
+  document.execCommand('styleWithCSS', false, 'true')
+  document.execCommand('fontSize', false, '7')
+
+  if (editorRef.value) {
+    const fonts = editorRef.value.querySelectorAll('font[size="7"]')
+    fonts.forEach(node => {
+      const span = document.createElement('span')
+      span.style.fontSize = `${fontSize.value}px`
+
+      while (node.firstChild) {
+        span.appendChild(node.firstChild)
+      }
+
+      node.parentNode?.replaceChild(span, node)
+    })
+  }
+
+  syncEditorFromDom()
+  saveSelection()
 }
 
 const increaseFontSize = () => {
-  fontSize.value = Math.min(32, fontSize.value + 1)
+  applyFontSize(fontSize.value + 1)
 }
 
 const decreaseFontSize = () => {
-  fontSize.value = Math.max(12, fontSize.value - 1)
+  applyFontSize(fontSize.value - 1)
 }
 
 const applyFontFamily = () => {
@@ -665,7 +780,9 @@ const extractEntities = async () => {
 const onEditorInput = () => {
   canonIssues.value = []
   removeCanonHighlightsFromDom()
+  normalizeFontTags()
   syncEditorFromDom()
+  saveSelection()
 }
 
 watch(editorHtml, async () => {
@@ -738,11 +855,16 @@ onMounted(async () => {
         <div class="toolbar">
           <div class="tool-row">
             <div class="toolbar-group">
-              <button class="toolbar-select-btn" type="button">
+              <button class="toolbar-select-btn" type="button" @mousedown.prevent="saveSelection">
                 <v-icon icon="mdi-format-font" size="16" />
               </button>
 
-              <select v-model="fontFamily" class="toolbar-select" @change="applyFontFamily">
+              <select
+                v-model="fontFamily"
+                class="toolbar-select"
+                @mousedown="saveSelection"
+                @change="applyFontFamily"
+              >
                 <option v-for="font in fontOptions" :key="font" :value="font">
                   {{ font }}
                 </option>
@@ -752,87 +874,87 @@ onMounted(async () => {
             <div class="tool-sep" />
 
             <div class="toolbar-group compact">
-              <button class="icon-btn" type="button" @click="decreaseFontSize">
+              <button class="icon-btn" type="button" @mousedown.prevent="saveSelection" @click="decreaseFontSize">
                 <v-icon icon="mdi-minus" size="16" />
               </button>
               <span class="font-size">{{ fontSize }}</span>
-              <button class="icon-btn" type="button" @click="increaseFontSize">
+              <button class="icon-btn" type="button" @mousedown.prevent="saveSelection" @click="increaseFontSize">
                 <v-icon icon="mdi-plus" size="16" />
               </button>
             </div>
 
             <div class="tool-sep" />
 
-            <button class="icon-btn" type="button" title="Bold" @click="runCommand('bold')">
+            <button class="icon-btn" type="button" title="Bold" @mousedown.prevent="saveSelection" @click="runCommand('bold')">
               <v-icon icon="mdi-format-bold" size="18" />
             </button>
-            <button class="icon-btn" type="button" title="Italic" @click="runCommand('italic')">
+            <button class="icon-btn" type="button" title="Italic" @mousedown.prevent="saveSelection" @click="runCommand('italic')">
               <v-icon icon="mdi-format-italic" size="18" />
             </button>
-            <button class="icon-btn" type="button" title="Underline" @click="runCommand('underline')">
+            <button class="icon-btn" type="button" title="Underline" @mousedown.prevent="saveSelection" @click="runCommand('underline')">
               <v-icon icon="mdi-format-underline" size="18" />
             </button>
-            <button class="icon-btn" type="button" title="Strike" @click="runCommand('strikeThrough')">
+            <button class="icon-btn" type="button" title="Strike" @mousedown.prevent="saveSelection" @click="runCommand('strikeThrough')">
               <v-icon icon="mdi-format-strikethrough-variant" size="18" />
             </button>
 
             <div class="tool-sep" />
 
-            <button class="icon-btn" type="button" title="Link" @click="insertLink">
+            <button class="icon-btn" type="button" title="Link" @mousedown.prevent="saveSelection" @click="insertLink">
               <v-icon icon="mdi-link-variant" size="18" />
             </button>
-            <button class="icon-btn" type="button" title="Remove Link" @click="runCommand('unlink')">
+            <button class="icon-btn" type="button" title="Remove Link" @mousedown.prevent="saveSelection" @click="runCommand('unlink')">
               <v-icon icon="mdi-link-variant-off" size="18" />
             </button>
 
             <div class="tool-sep" />
 
-            <button class="icon-btn" type="button" title="Align Left" @click="runCommand('justifyLeft')">
+            <button class="icon-btn" type="button" title="Align Left" @mousedown.prevent="saveSelection" @click="runCommand('justifyLeft')">
               <v-icon icon="mdi-format-align-left" size="18" />
             </button>
-            <button class="icon-btn" type="button" title="Align Center" @click="runCommand('justifyCenter')">
+            <button class="icon-btn" type="button" title="Align Center" @mousedown.prevent="saveSelection" @click="runCommand('justifyCenter')">
               <v-icon icon="mdi-format-align-center" size="18" />
             </button>
-            <button class="icon-btn" type="button" title="Align Right" @click="runCommand('justifyRight')">
+            <button class="icon-btn" type="button" title="Align Right" @mousedown.prevent="saveSelection" @click="runCommand('justifyRight')">
               <v-icon icon="mdi-format-align-right" size="18" />
             </button>
-            <button class="icon-btn" type="button" title="Justify" @click="runCommand('justifyFull')">
+            <button class="icon-btn" type="button" title="Justify" @mousedown.prevent="saveSelection" @click="runCommand('justifyFull')">
               <v-icon icon="mdi-format-align-justify" size="18" />
             </button>
 
             <div class="tool-sep" />
 
-            <button class="icon-btn" type="button" title="Bulleted List" @click="runCommand('insertUnorderedList')">
+            <button class="icon-btn" type="button" title="Bulleted List" @mousedown.prevent="saveSelection" @click="runCommand('insertUnorderedList')">
               <v-icon icon="mdi-format-list-bulleted" size="18" />
             </button>
-            <button class="icon-btn" type="button" title="Numbered List" @click="runCommand('insertOrderedList')">
+            <button class="icon-btn" type="button" title="Numbered List" @mousedown.prevent="saveSelection" @click="runCommand('insertOrderedList')">
               <v-icon icon="mdi-format-list-numbered" size="18" />
             </button>
 
             <div class="tool-sep" />
 
-            <button class="icon-btn" type="button" title="Paragraph" @click="setBlock('p')">
+            <button class="icon-btn" type="button" title="Paragraph" @mousedown.prevent="saveSelection" @click="setBlock('p')">
               <v-icon icon="mdi-format-paragraph" size="18" />
             </button>
-            <button class="icon-btn" type="button" title="Heading" @click="setBlock('h1')">
+            <button class="icon-btn" type="button" title="Heading" @mousedown.prevent="saveSelection" @click="setBlock('h1')">
               <v-icon icon="mdi-format-header-1" size="18" />
             </button>
-            <button class="icon-btn" type="button" title="Subheading" @click="setBlock('h2')">
+            <button class="icon-btn" type="button" title="Subheading" @mousedown.prevent="saveSelection" @click="setBlock('h2')">
               <v-icon icon="mdi-format-header-2" size="18" />
             </button>
-            <button class="icon-btn" type="button" title="Quote" @click="setBlock('blockquote')">
+            <button class="icon-btn" type="button" title="Quote" @mousedown.prevent="saveSelection" @click="setBlock('blockquote')">
               <v-icon icon="mdi-format-quote-close" size="18" />
             </button>
 
             <div class="tool-sep" />
 
-            <button class="icon-btn" type="button" title="Undo" @click="runCommand('undo')">
+            <button class="icon-btn" type="button" title="Undo" @mousedown.prevent="saveSelection" @click="runCommand('undo')">
               <v-icon icon="mdi-undo" size="18" />
             </button>
-            <button class="icon-btn" type="button" title="Redo" @click="runCommand('redo')">
+            <button class="icon-btn" type="button" title="Redo" @mousedown.prevent="saveSelection" @click="runCommand('redo')">
               <v-icon icon="mdi-redo" size="18" />
             </button>
-            <button class="icon-btn" type="button" title="Clear Formatting" @click="clearFormatting">
+            <button class="icon-btn" type="button" title="Clear Formatting" @mousedown.prevent="saveSelection" @click="clearFormatting">
               <v-icon icon="mdi-format-clear" size="18" />
             </button>
           </div>
@@ -850,8 +972,10 @@ onMounted(async () => {
               class="editor-content"
               contenteditable="true"
               spellcheck="true"
-              :style="{ fontSize: `${fontSize}px`, fontFamily }"
               @input="onEditorInput"
+              @mouseup="saveSelection"
+              @keyup="saveSelection"
+              @focus="saveSelection"
             ></div>
           </div>
         </div>

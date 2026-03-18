@@ -41,13 +41,6 @@ const recentSearches = ref<string[]>([])
 const projects = ref<ProjectItem[]>([])
 const selectedScope = ref<string>(ALL_PROJECTS_VALUE)
 
-const suggestionItems = [
-  'Scenes with a specific tone',
-  'Character appearances or mentions',
-  'References to locations or artifacts',
-  'Dialogue around a theme or event'
-]
-
 const currentProjectId = computed<number | null>(() => {
   if (selectedScope.value === ALL_PROJECTS_VALUE) {
     return null
@@ -126,8 +119,15 @@ const clearSearch = () => {
 }
 
 const scoreLabel = (score: number) => {
-  const percent = Math.max(0, Math.min(100, Math.round(score * 100)))
-  return `${percent}% match`
+  if (score >= 0.55) return 'High relevance'
+  if (score >= 0.35) return 'Medium relevance'
+  return 'Low relevance'
+}
+
+const scoreBadgeClass = (score: number) => {
+  if (score >= 0.55) return 'score-high'
+  if (score >= 0.35) return 'score-medium'
+  return 'score-low'
 }
 
 const openChapter = async (chapterId: number) => {
@@ -182,7 +182,7 @@ const submitSearch = async () => {
   await runSearch()
 }
 
-const useSuggestion = async (text: string) => {
+const useRecentSearch = async (text: string) => {
   await runSearch(text)
 }
 
@@ -246,22 +246,6 @@ onMounted(async () => {
       </div>
 
       <div v-if="!hasSearched" class="search-prestate">
-        <div class="panel suggestion-panel">
-          <h2>Try searching in {{ currentScopeLabel }}:</h2>
-          <div class="suggestion-grid">
-            <button
-              v-for="item in suggestionItems"
-              :key="item"
-              type="button"
-              class="suggestion-card"
-              @click="useSuggestion(item)"
-            >
-              <v-icon icon="mdi-magnify" size="16" color="#9ca3af" />
-              <span>{{ item }}</span>
-            </button>
-          </div>
-        </div>
-
         <div class="panel recent-panel">
           <h2>Recent Searches</h2>
 
@@ -271,7 +255,7 @@ onMounted(async () => {
               :key="item"
               type="button"
               class="recent-item"
-              @click="useSuggestion(item)"
+              @click="useRecentSearch(item)"
             >
               <v-icon icon="mdi-history" size="16" color="#9ca3af" />
               <span>{{ item }}</span>
@@ -329,7 +313,7 @@ onMounted(async () => {
                 </p>
               </div>
 
-              <div class="score-badge">
+              <div class="score-badge" :class="scoreBadgeClass(result.score)">
                 {{ scoreLabel(result.score) }}
               </div>
             </div>
@@ -496,7 +480,6 @@ onMounted(async () => {
   gap: 24px;
 }
 
-.suggestion-panel,
 .recent-panel,
 .results-empty,
 .result-card {
@@ -504,7 +487,6 @@ onMounted(async () => {
   border-radius: 18px;
 }
 
-.suggestion-panel h2,
 .recent-panel h2,
 .results-head h2 {
   margin: 0 0 18px;
@@ -513,13 +495,11 @@ onMounted(async () => {
   font-weight: 700;
 }
 
-.suggestion-grid {
+.recent-list {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  gap: 12px;
 }
 
-.suggestion-card,
 .recent-item {
   display: flex;
   align-items: center;
@@ -535,16 +515,10 @@ onMounted(async () => {
   transition: 0.18s ease;
 }
 
-.suggestion-card:hover,
 .recent-item:hover {
   background: #252525;
   border-color: rgba(79, 70, 229, 0.35);
   color: white;
-}
-
-.recent-list {
-  display: grid;
-  gap: 12px;
 }
 
 .empty-recent {
@@ -655,11 +629,27 @@ onMounted(async () => {
   white-space: nowrap;
   padding: 8px 12px;
   border-radius: 999px;
-  background: rgba(79, 70, 229, 0.16);
-  color: #c7d2fe;
-  border: 1px solid rgba(99, 102, 241, 0.3);
   font-size: 0.9rem;
   font-weight: 600;
+  border: 1px solid transparent;
+}
+
+.score-high {
+  background: rgba(34, 197, 94, 0.14);
+  color: #86efac;
+  border-color: rgba(34, 197, 94, 0.28);
+}
+
+.score-medium {
+  background: rgba(245, 158, 11, 0.14);
+  color: #fcd34d;
+  border-color: rgba(245, 158, 11, 0.28);
+}
+
+.score-low {
+  background: rgba(99, 102, 241, 0.16);
+  color: #c7d2fe;
+  border-color: rgba(99, 102, 241, 0.3);
 }
 
 .result-text {
@@ -701,10 +691,6 @@ onMounted(async () => {
 
   .scope-control {
     min-width: 100%;
-  }
-
-  .suggestion-grid {
-    grid-template-columns: 1fr;
   }
 
   .score-badge {
