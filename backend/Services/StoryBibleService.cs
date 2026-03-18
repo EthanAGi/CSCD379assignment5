@@ -98,11 +98,19 @@ public class StoryBibleService : IStoryBibleService
                 e => ExtractSummary(e.SummaryJson),
                 StringComparer.OrdinalIgnoreCase);
 
+        var existingThemeProfiles = existingEntities
+            .Where(e => e.Type == EntityType.Theme)
+            .ToDictionary(
+                e => e.Name,
+                e => ExtractSummary(e.SummaryJson),
+                StringComparer.OrdinalIgnoreCase);
+
         var aiResult = await _azureChapterExtractionService.ExtractAsync(
             chapter.Title,
             chapter.Content,
             existingCharacterProfiles,
             existingLocationProfiles,
+            existingThemeProfiles,
             cancellationToken);
 
         var normalizedCharacters = DeduplicateExtractedEntities(
@@ -112,6 +120,10 @@ public class StoryBibleService : IStoryBibleService
         var normalizedLocations = DeduplicateExtractedEntities(
             aiResult.Locations,
             EntityType.Location);
+
+        var normalizedThemes = DeduplicateExtractedEntities(
+            aiResult.Themes,
+            EntityType.Theme);
 
         foreach (var character in normalizedCharacters)
         {
@@ -153,6 +165,26 @@ public class StoryBibleService : IStoryBibleService
                 cancellationToken);
         }
 
+        foreach (var theme in normalizedThemes)
+        {
+            var entity = await UpsertEntityAsync(
+                chapter.ProjectId,
+                EntityType.Theme,
+                theme.Name,
+                theme.Description,
+                cancellationToken);
+
+            await AddFactIfMissingAsync(
+                chapter.ProjectId,
+                entity.Id,
+                "theme",
+                theme.Name,
+                chapter.Id,
+                theme.SourceQuote,
+                theme.Confidence,
+                cancellationToken);
+        }
+
         await _db.SaveChangesAsync(cancellationToken);
 
         return new ChapterEntityExtractionResponse
@@ -172,6 +204,13 @@ public class StoryBibleService : IStoryBibleService
                 Description = l.Description,
                 SourceQuote = l.SourceQuote,
                 Confidence = l.Confidence
+            }).ToList(),
+            Themes = normalizedThemes.Select(t => new ExtractedEntityDto
+            {
+                Name = t.Name,
+                Description = t.Description,
+                SourceQuote = t.SourceQuote,
+                Confidence = t.Confidence
             }).ToList()
         };
     }
@@ -288,7 +327,7 @@ public class StoryBibleService : IStoryBibleService
 
     private static string PickBetterName(string left, string right, EntityType type)
     {
-        if (type == EntityType.Location)
+        if (type == EntityType.Location || type == EntityType.Theme)
         {
             return right.Length > left.Length ? right : left;
         }
@@ -407,15 +446,15 @@ public class StoryBibleService : IStoryBibleService
 
     private static bool AreEquivalentNames(string left, string right, EntityType type)
     {
-        if (type == EntityType.Location)
+        if (type == EntityType.Location || type == EntityType.Theme)
         {
-            return AreEquivalentLocationNames(left, right);
+            return AreEquivalentSimplePhrases(left, right);
         }
 
         return AreEquivalentCharacterNames(left, right);
     }
 
-    private static bool AreEquivalentLocationNames(string left, string right)
+    private static bool AreEquivalentSimplePhrases(string left, string right)
     {
         var l = NormalizeSimplePhrase(left);
         var r = NormalizeSimplePhrase(right);

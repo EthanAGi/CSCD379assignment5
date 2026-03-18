@@ -37,6 +37,22 @@ type StoryBibleEntity = {
   updatedAt: string
 }
 
+type CanonIssue = {
+  passageText: string
+  issue: string
+  expectedCanon: string
+  severity: 'warning' | 'error' | string
+  supportingChapterId?: number | null
+  supportingQuote: string
+  entityName: string
+}
+
+type CanonCheckResponse = {
+  chapterId: number
+  projectId: number
+  issues: CanonIssue[]
+}
+
 const route = useRoute()
 const { apiFetch } = useApi()
 const auth = useAuth()
@@ -52,6 +68,7 @@ const fontFamily = ref('Georgia')
 const loading = ref(true)
 const saving = ref(false)
 const extracting = ref(false)
+const checkingCanon = ref(false)
 const loadingChapterEntities = ref(false)
 const errorMessage = ref('')
 const successMessage = ref('')
@@ -60,6 +77,7 @@ const editorRef = ref<HTMLElement | null>(null)
 
 const detectedCharacters = ref<ExtractedEntity[]>([])
 const detectedLocations = ref<ExtractedEntity[]>([])
+const canonIssues = ref<CanonIssue[]>([])
 
 const fontOptions = [
   'Georgia',
@@ -74,7 +92,7 @@ const editorText = computed(() => {
   if (!editorHtml.value) return ''
   if (typeof window === 'undefined') return editorHtml.value.replace(/<[^>]*>/g, ' ')
   const temp = document.createElement('div')
-  temp.innerHTML = editorHtml.value
+  temp.innerHTML = stripCanonMarkupFromHtml(editorHtml.value)
   return temp.textContent || temp.innerText || ''
 })
 
@@ -117,8 +135,43 @@ const plainTextToHtml = (value: string) => {
 
 const looksLikeHtml = (value: string) => /<\/?[a-z][\s\S]*>/i.test(value)
 
+const unwrapElement = (element: HTMLElement) => {
+  const parent = element.parentNode
+  if (!parent) return
+
+  while (element.firstChild) {
+    parent.insertBefore(element.firstChild, element)
+  }
+
+  parent.removeChild(element)
+}
+
+const removeCanonHighlightsFromDom = () => {
+  if (!editorRef.value) return
+
+  const highlighted = editorRef.value.querySelectorAll('.canon-issue-highlight')
+  highlighted.forEach(node => unwrapElement(node as HTMLElement))
+}
+
+const stripCanonMarkupFromHtml = (html: string) => {
+  if (typeof window === 'undefined') {
+    return html.replace(/<span class="canon-issue-highlight"[^>]*>(.*?)<\/span>/gi, '$1')
+  }
+
+  const temp = document.createElement('div')
+  temp.innerHTML = html
+
+  temp.querySelectorAll('.canon-issue-highlight').forEach(node => {
+    unwrapElement(node as HTMLElement)
+  })
+
+  return temp.innerHTML
+}
+
 const syncEditorFromDom = () => {
   if (!editorRef.value) return
+
+  removeCanonHighlightsFromDom()
   editorHtml.value = editorRef.value.innerHTML
 }
 
@@ -126,7 +179,8 @@ const writeEditorContentToDom = async () => {
   await nextTick()
 
   if (editorRef.value) {
-    editorRef.value.innerHTML = editorHtml.value || '<p></p>'
+    editorRef.value.innerHTML = stripCanonMarkupFromHtml(editorHtml.value || '<p></p>')
+    applyCanonHighlights()
   }
 }
 
@@ -228,6 +282,40 @@ const normalizeStoryBibleEntity = (item: any): StoryBibleEntity | null => {
   }
 }
 
+const normalizeCanonIssue = (item: any): CanonIssue | null => {
+  const passageText = String(item?.passageText ?? item?.PassageText ?? '').trim()
+  const issue = String(item?.issue ?? item?.Issue ?? '').trim()
+
+  if (!passageText || !issue) return null
+
+  return {
+    passageText,
+    issue,
+    expectedCanon: String(item?.expectedCanon ?? item?.ExpectedCanon ?? '').trim(),
+    severity: String(item?.severity ?? item?.Severity ?? 'warning').trim() || 'warning',
+    supportingChapterId:
+      item?.supportingChapterId ?? item?.SupportingChapterId ?? null,
+    supportingQuote: String(item?.supportingQuote ?? item?.SupportingQuote ?? '').trim(),
+    entityName: String(item?.entityName ?? item?.EntityName ?? '').trim()
+  }
+}
+
+const normalizeCanonCheckResponse = (raw: any): CanonCheckResponse => {
+  const rawIssues = Array.isArray(raw?.issues)
+    ? raw.issues
+    : Array.isArray(raw?.Issues)
+      ? raw.Issues
+      : []
+
+  return {
+    chapterId: Number(raw?.chapterId ?? raw?.ChapterId ?? 0),
+    projectId: Number(raw?.projectId ?? raw?.ProjectId ?? 0),
+    issues: rawIssues
+      .map(normalizeCanonIssue)
+      .filter((item: CanonIssue | null): item is CanonIssue => item !== null)
+  }
+}
+
 const dedupeEntitiesByName = (items: ExtractedEntity[]) => {
   const seen = new Set<string>()
   return items.filter(item => {
@@ -249,6 +337,67 @@ const chapterContainsEntity = (chapterText: string, entityName: string) => {
   const escapedName = escapeRegExp(trimmedName).replace(/\s+/g, '\\s+')
   const regex = new RegExp(`\\b${escapedName}\\b`, 'i')
   return regex.test(trimmedText)
+}
+
+const tryHighlightPassage = (passageText: string, tooltip: string) => {
+  if (!editorRef.value) return false
+
+  const target = passageText.trim()
+  if (!target) return false
+
+  const walker = document.createTreeWalker(
+    editorRef.value,
+    NodeFilter.SHOW_TEXT,
+    {
+      acceptNode(node) {
+        const parentElement = node.parentElement
+        if (!node.nodeValue?.trim()) return NodeFilter.FILTER_REJECT
+        if (parentElement?.closest('.canon-issue-highlight')) return NodeFilter.FILTER_REJECT
+        return NodeFilter.FILTER_ACCEPT
+      }
+    }
+  )
+
+  const targetLower = target.toLowerCase()
+
+  let currentNode: Node | null = walker.nextNode()
+  while (currentNode) {
+    const textNode = currentNode as Text
+    const text = textNode.nodeValue ?? ''
+    const index = text.toLowerCase().indexOf(targetLower)
+
+    if (index >= 0) {
+      const range = document.createRange()
+      range.setStart(textNode, index)
+      range.setEnd(textNode, index + target.length)
+
+      const span = document.createElement('span')
+      span.className = 'canon-issue-highlight'
+      span.setAttribute('title', tooltip)
+
+      try {
+        range.surroundContents(span)
+        return true
+      } catch {
+        return false
+      }
+    }
+
+    currentNode = walker.nextNode()
+  }
+
+  return false
+}
+
+const applyCanonHighlights = () => {
+  if (!editorRef.value) return
+
+  removeCanonHighlightsFromDom()
+
+  for (const issue of canonIssues.value) {
+    const tooltip = `${issue.issue}${issue.expectedCanon ? ` | Canon: ${issue.expectedCanon}` : ''}`
+    tryHighlightPassage(issue.passageText, tooltip)
+  }
 }
 
 const loadStoryBibleMatchesForChapter = async () => {
@@ -299,6 +448,37 @@ const loadStoryBibleMatchesForChapter = async () => {
   }
 }
 
+const runCanonChecks = async () => {
+  if (!chapterId.value || Number.isNaN(chapterId.value)) return
+
+  checkingCanon.value = true
+  canonIssues.value = []
+
+  try {
+    removeCanonHighlightsFromDom()
+    syncEditorFromDom()
+
+    const rawResult = await apiFetch<any>(`/chapters/${chapterId.value}/canon-checks`, {
+      method: 'POST'
+    })
+
+    const result = normalizeCanonCheckResponse(rawResult)
+    canonIssues.value = result.issues
+
+    await nextTick()
+    applyCanonHighlights()
+  } catch (error: any) {
+    console.error('Failed to run canon checks:', error)
+
+    if (error?.status === 401 || error?.data?.status === 401) {
+      await redirectToLogin()
+      return
+    }
+  } finally {
+    checkingCanon.value = false
+  }
+}
+
 const saveChapterInternal = async (showSuccessMessage = true) => {
   const trimmedTitle = title.value.trim()
 
@@ -310,13 +490,16 @@ const saveChapterInternal = async (showSuccessMessage = true) => {
   saving.value = true
 
   try {
+    removeCanonHighlightsFromDom()
     syncEditorFromDom()
+
+    const cleanedHtml = stripCanonMarkupFromHtml(editorHtml.value)
 
     const updated = await apiFetch<Chapter>(`/chapters/${chapterId.value}`, {
       method: 'PUT',
       body: {
         title: trimmedTitle,
-        content: editorHtml.value
+        content: cleanedHtml
       }
     })
 
@@ -420,6 +603,7 @@ const extractEntities = async () => {
     return
   }
 
+  removeCanonHighlightsFromDom()
   syncEditorFromDom()
 
   if (!title.value.trim()) {
@@ -435,6 +619,7 @@ const extractEntities = async () => {
   extracting.value = true
   detectedCharacters.value = []
   detectedLocations.value = []
+  canonIssues.value = []
 
   try {
     const saved = await saveChapterInternal(false)
@@ -453,11 +638,12 @@ const extractEntities = async () => {
     detectedLocations.value = dedupeEntitiesByName(result.locations)
 
     await loadStoryBibleMatchesForChapter()
+    await runCanonChecks()
 
     successMessage.value =
-      result.characters.length || result.locations.length
-        ? 'AI extraction completed successfully.'
-        : 'AI extraction completed, but no characters or locations were found.'
+      canonIssues.value.length > 0
+        ? `AI extraction completed. ${canonIssues.value.length} canon issue(s) flagged.`
+        : 'AI extraction completed successfully.'
   } catch (error: any) {
     console.error('Failed to extract entities:', error)
 
@@ -476,8 +662,14 @@ const extractEntities = async () => {
   }
 }
 
+const onEditorInput = () => {
+  canonIssues.value = []
+  removeCanonHighlightsFromDom()
+  syncEditorFromDom()
+}
+
 watch(editorHtml, async () => {
-  if (!loading.value && editorRef.value && editorRef.value.innerHTML !== editorHtml.value) {
+  if (!loading.value && editorRef.value && editorRef.value.innerHTML !== stripCanonMarkupFromHtml(editorHtml.value)) {
     await writeEditorContentToDom()
   }
 })
@@ -504,7 +696,7 @@ onMounted(async () => {
             class="chapter-title-input"
             type="text"
             placeholder="Chapter title"
-            :disabled="loading || saving || extracting"
+            :disabled="loading || saving || extracting || checkingCanon"
           />
           <p>Open and edit your selected chapter</p>
         </div>
@@ -515,16 +707,16 @@ onMounted(async () => {
 
         <button
           class="btn-secondary extract-btn"
-          :disabled="loading || saving || extracting"
+          :disabled="loading || saving || extracting || checkingCanon"
           @click="extractEntities"
         >
           <v-icon icon="mdi-robot-outline" size="16" />
-          {{ extracting ? 'Extracting...' : 'Extract AI' }}
+          {{ extracting ? 'Extracting...' : checkingCanon ? 'Checking Canon...' : 'Extract AI' }}
         </button>
 
         <button
           class="btn-primary save-btn"
-          :disabled="loading || saving || extracting"
+          :disabled="loading || saving || extracting || checkingCanon"
           @click="saveChapter"
         >
           <v-icon icon="mdi-content-save-outline" size="16" />
@@ -659,7 +851,7 @@ onMounted(async () => {
               contenteditable="true"
               spellcheck="true"
               :style="{ fontSize: `${fontSize}px`, fontFamily }"
-              @input="syncEditorFromDom"
+              @input="onEditorInput"
             ></div>
           </div>
         </div>
@@ -673,6 +865,7 @@ onMounted(async () => {
             <div><span>Characters</span><strong>{{ charCount }}</strong></div>
             <div><span>Detected Characters</span><strong>{{ detectedCharacters.length }}</strong></div>
             <div><span>Detected Locations</span><strong>{{ detectedLocations.length }}</strong></div>
+            <div><span>Canon Warnings</span><strong>{{ canonIssues.length }}</strong></div>
             <div><span>Read Time</span><strong>{{ readTimeMinutes }} min</strong></div>
           </div>
         </div>
@@ -682,15 +875,15 @@ onMounted(async () => {
             <h3>AI Extraction</h3>
             <button
               class="mini-extract-btn"
-              :disabled="loading || saving || extracting"
+              :disabled="loading || saving || extracting || checkingCanon"
               @click="extractEntities"
             >
-              {{ extracting ? 'Running...' : 'Run' }}
+              {{ extracting ? 'Running...' : checkingCanon ? 'Checking...' : 'Run' }}
             </button>
           </div>
 
           <p class="side-help">
-            Save and analyze this chapter with your Foundry-powered backend to detect characters and locations.
+            Save and analyze this chapter with your AI backend to detect story bible entities and flag canon contradictions directly in the editor.
           </p>
         </div>
 
@@ -1017,6 +1210,15 @@ onMounted(async () => {
   border-left: 3px solid #4f46e5;
   padding-left: 14px;
   color: #d1d5db;
+}
+
+:deep(.canon-issue-highlight) {
+  display: inline;
+  text-decoration-line: underline;
+  text-decoration-style: wavy;
+  text-decoration-color: #ef4444;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 3px;
 }
 
 .editor-side {

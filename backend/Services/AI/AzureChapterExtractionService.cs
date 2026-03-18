@@ -26,6 +26,7 @@ public class AzureChapterExtractionService
         string chapterContent,
         Dictionary<string, string>? existingCharacterProfiles = null,
         Dictionary<string, string>? existingLocationProfiles = null,
+        Dictionary<string, string>? existingThemeProfiles = null,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(_options.Endpoint))
@@ -47,6 +48,7 @@ public class AzureChapterExtractionService
 
         var existingCharactersJson = JsonSerializer.Serialize(existingCharacterProfiles ?? new Dictionary<string, string>());
         var existingLocationsJson = JsonSerializer.Serialize(existingLocationProfiles ?? new Dictionary<string, string>());
+        var existingThemesJson = JsonSerializer.Serialize(existingThemeProfiles ?? new Dictionary<string, string>());
 
         var systemPrompt = """
 You are an information extraction assistant for a fiction-writing application.
@@ -56,16 +58,26 @@ Your job is to extract and update STORY BIBLE information from a chapter.
 Extract only:
 1. characters
 2. locations
+3. themes
 
 Important behavior:
 - Use the chapter text as the source of truth for new evidence.
-- You may be given existing character and location profiles from earlier chapters.
+- You may be given existing character, location, and theme profiles from earlier chapters.
 - If an entity already exists, update its description by combining old known information with new chapter evidence.
 - If the chapter reveals new details, include them in the updated description.
-- If the chapter changes or deepens understanding of a character or place, revise the description to reflect that.
+- If the chapter changes or deepens understanding of a character, place, or theme, revise the description to reflect that.
 - Do not remove earlier facts unless the chapter clearly contradicts them.
 - Keep descriptions concise, cumulative, and factual.
 - Prefer a single canonical identity for the same entity when obvious from context.
+
+Theme rules:
+- A theme is a recurring idea, emotional thread, moral conflict, symbolic pattern, or narrative concern.
+- Extract themes like "grief", "revenge", "forgiveness", "found family", "isolation", "identity", "duty versus desire".
+- Prefer short canonical theme names, usually 1 to 4 words.
+- Do not extract plot events as themes.
+- Do not extract generic words like "story", "chapter", "conflict", or "character development".
+- Only include themes that are genuinely supported by the chapter text.
+- The description for a theme should explain how that theme appears in this story so far.
 
 Rules:
 - Return only strict JSON.
@@ -99,6 +111,14 @@ JSON shape:
       "sourceQuote": "string",
       "confidence": 0.0
     }
+  ],
+  "themes": [
+    {
+      "name": "string",
+      "description": "string",
+      "sourceQuote": "string",
+      "confidence": 0.0
+    }
   ]
 }
 """;
@@ -109,6 +129,9 @@ Existing character profiles:
 
 Existing location profiles:
 {existingLocationsJson}
+
+Existing theme profiles:
+{existingThemesJson}
 
 Chapter title: {chapterTitle}
 

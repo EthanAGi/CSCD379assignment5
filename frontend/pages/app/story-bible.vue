@@ -6,12 +6,12 @@ import { useAuth } from '~/composables/useAuth'
 
 definePageMeta({ layout: 'app' })
 
-type TabKey = 'characters' | 'locations' | 'themes' | 'arcs'
+type TabKey = 'characters' | 'locations' | 'themes'
 
 type StoryEntity = {
   id: number
   projectId: number
-  type: 'Character' | 'Location' | 'Theme' | 'Arc'
+  type: 'Character' | 'Location' | 'Theme'
   name: string
   summary: string
   updatedAt: string
@@ -36,8 +36,7 @@ const searchQuery = ref('')
 const tabs: Array<{ id: TabKey; label: string; icon: string; apiType: StoryEntity['type'] }> = [
   { id: 'characters', label: 'Characters', icon: 'mdi-account-group-outline', apiType: 'Character' },
   { id: 'locations', label: 'Locations', icon: 'mdi-map-marker-outline', apiType: 'Location' },
-  { id: 'themes', label: 'Themes', icon: 'mdi-lightbulb-outline', apiType: 'Theme' },
-  { id: 'arcs', label: 'Story Arcs', icon: 'mdi-trending-up', apiType: 'Arc' }
+  { id: 'themes', label: 'Themes', icon: 'mdi-lightbulb-outline', apiType: 'Theme' }
 ]
 
 const projects = ref<ProjectSummary[]>([])
@@ -538,8 +537,7 @@ onMounted(async () => {
             :class="{
               purple: activeTab === 'characters',
               blue: activeTab === 'locations',
-              pink: activeTab === 'themes',
-              green: activeTab === 'arcs'
+              pink: activeTab === 'themes'
             }"
           >
             <v-icon
@@ -550,9 +548,7 @@ onMounted(async () => {
                   ? '#c084fc'
                   : activeTab === 'locations'
                     ? '#60a5fa'
-                    : activeTab === 'themes'
-                      ? '#f472b6'
-                      : '#4ade80'
+                    : '#f472b6'
               "
             />
           </div>
@@ -630,7 +626,6 @@ onMounted(async () => {
               <option value="Character">Character</option>
               <option value="Location">Location</option>
               <option value="Theme">Theme</option>
-              <option value="Arc">Arc</option>
             </select>
           </label>
 
@@ -937,7 +932,6 @@ onMounted(async () => {
 .empty-icon.purple { background: rgba(192, 132, 252, 0.14); }
 .empty-icon.blue { background: rgba(96, 165, 250, 0.14); }
 .empty-icon.pink { background: rgba(244, 114, 182, 0.14); }
-.empty-icon.green { background: rgba(74, 222, 128, 0.14); }
 
 .empty-card h3 {
   margin: 0 0 8px;

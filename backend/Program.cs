@@ -112,6 +112,7 @@ builder.Services.Configure<AzureAiOptions>(
 // Azure AI services
 builder.Services.AddHttpClient<EmbeddingService>();
 builder.Services.AddHttpClient<AzureChapterExtractionService>();
+builder.Services.AddHttpClient<CanonConsistencyService>();
 builder.Services.AddScoped<ChapterEmbeddingService>();
 builder.Services.AddScoped<ISemanticSearchService, SemanticSearchService>();
 

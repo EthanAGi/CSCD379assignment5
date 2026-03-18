@@ -12,4 +12,5 @@ public class AiChapterExtractionResult
 {
     public List<AiExtractedEntity> Characters { get; set; } = new();
     public List<AiExtractedEntity> Locations { get; set; } = new();
+    public List<AiExtractedEntity> Themes { get; set; } = new();
 }
