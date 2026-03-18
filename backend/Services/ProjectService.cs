@@ -17,6 +17,11 @@ public class ProjectService : IProjectService
 
     public async Task<ProjectResponse> CreateAsync(string userId, CreateProjectRequest request)
     {
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            throw new ArgumentException("User ID is required.", nameof(userId));
+        }
+
         var project = new Project
         {
             OwnerId = userId,
@@ -38,7 +43,13 @@ public class ProjectService : IProjectService
 
     public async Task<List<ProjectResponse>> GetForUserAsync(string userId)
     {
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return new List<ProjectResponse>();
+        }
+
         return await _db.Projects
+            .AsNoTracking()
             .Where(p => p.OwnerId == userId)
             .OrderByDescending(p => p.CreatedAt)
             .Select(p => new ProjectResponse
